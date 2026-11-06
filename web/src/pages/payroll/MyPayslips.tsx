@@ -17,7 +17,7 @@ export function MyPayslips() {
       ) : q.error ? (
         <ErrorState message={q.error.message} onRetry={() => q.refetch()} />
       ) : q.data!.data.length === 0 ? (
-        <EmptyState title="No payslips yet" hint="Your payslip shows up here after payroll for the month is approved" />
+        <EmptyState title="No payslips yet" hint="Your payslip shows up here after payroll for the month is approved" illustration="payroll.empty" />
       ) : (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">

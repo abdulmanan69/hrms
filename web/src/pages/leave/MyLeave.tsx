@@ -37,6 +37,7 @@ export function MyLeave() {
               allowCancel
               onOpen={setOpenId}
               emptyTitle="No leave requests yet"
+              emptyIllustration="leave.empty"
               emptyHint="Use Apply for leave; your requests and their status show here"
             />
           </Card>

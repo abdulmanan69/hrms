@@ -51,6 +51,7 @@ export function LeaveRequests() {
               showStatus={false}
               onOpen={setOpenId}
               emptyTitle="Nothing waiting"
+              emptyIllustration="leave.all-clear"
               emptyHint="New requests from the people you approve for show up here"
             />
           </Card>

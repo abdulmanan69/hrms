@@ -176,7 +176,7 @@ function nextText(n: number | null, hasSlabs: boolean) {
 }
 
 function PeopleTable({ s }: { s: SalesSummary }) {
-  if (s.people.length === 0) return <EmptyState title="No sales recorded this month" hint="Sales come from VICIdial every hour, or are recorded here by hand" />;
+  if (s.people.length === 0) return <EmptyState illustration="sales.empty" title="No sales recorded this month" hint="Sales come from VICIdial every hour, or are recorded here by hand" />;
   const showFronter = s.totals.fronter > 0 || s.plan.fronter.slabs.length > 0;
   return (
     <div className="card overflow-hidden">

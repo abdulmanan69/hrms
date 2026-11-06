@@ -131,6 +131,7 @@ web/src/
   components/Layout.tsx  sidebar, top bar, notifications
   pages/<module>/        pages per module
   lib/                   api client, auth, formatting
+  illustrations/         registry.ts (every illustration by name), Illustration.tsx, svg/, LICENSES.md
 docs/BUILD_CONTRACT.md   conventions and design rules for adding to a module
 ```
 

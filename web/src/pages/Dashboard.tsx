@@ -265,6 +265,7 @@ function NoRun() {
       <EmptyState
         bare
         title="No payroll run yet"
+        illustration="dashboard.getting-started"
         hint="A run computes every active employee's payslip as A + B − C"
         action={
           can('payroll.manage') && (

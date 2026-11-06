@@ -170,6 +170,7 @@ function AllDocuments() {
           bare
           title={filtered ? 'No documents match' : 'No documents yet'}
           hint={filtered ? 'Try another type or name' : 'Upload documents from an employee profile or from the list on the left'}
+          illustration={filtered ? undefined : 'documents.empty'}
         />
       ) : (
         <div className="overflow-x-auto">

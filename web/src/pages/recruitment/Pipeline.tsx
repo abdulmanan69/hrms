@@ -123,6 +123,7 @@ export function Pipeline() {
       ) : total === 0 && !filtered ? (
         <EmptyState
           title="No open applications"
+          illustration="recruitment.empty"
           hint="Add a candidate and their application starts in Application received."
           action={
             canMove ? (

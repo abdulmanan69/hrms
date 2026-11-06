@@ -9,6 +9,8 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, Check, ChevronLeft, ChevronRight, Inbox, Loader2, Search, X } from 'lucide-react';
 import type { PageMeta } from '../lib/api';
 import { initials, label as toLabel } from '../lib/format';
+import { Illustration } from '../illustrations/Illustration';
+import type { IllustrationName } from '../illustrations/registry';
 
 export const ICON = { size: 16, strokeWidth: 1.5 } as const;
 
@@ -214,10 +216,27 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
   );
 }
 
-export function EmptyState({ title, hint, action, bare }: { title: string; hint?: ReactNode; action?: ReactNode; bare?: boolean }) {
+export function EmptyState({
+  title,
+  hint,
+  action,
+  bare,
+  illustration,
+}: {
+  title: string;
+  hint?: ReactNode;
+  action?: ReactNode;
+  bare?: boolean;
+  /** a drawing from src/illustrations, for first-run states only; filtered lists keep the icon */
+  illustration?: IllustrationName;
+}) {
   return (
-    <div className={`flex flex-col items-center gap-1 px-6 py-12 text-center ${bare ? '' : 'card'}`}>
-      <Inbox size={20} strokeWidth={1.5} className="mb-1 text-ink-3" />
+    <div className={`flex flex-col items-center gap-1 px-6 text-center ${illustration ? 'py-10' : 'py-12'} ${bare ? '' : 'card'}`}>
+      {illustration ? (
+        <Illustration name={illustration} width={illustration === 'employees.empty' ? 136 : 208} className="mb-4" />
+      ) : (
+        <Inbox size={20} strokeWidth={1.5} className="mb-1 text-ink-3" />
+      )}
       <p className="text-sm font-medium">{title}</p>
       {hint && <p className="max-w-sm text-sm text-ink-3">{hint}</p>}
       {action && <div className="mt-3">{action}</div>}

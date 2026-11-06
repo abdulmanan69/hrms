@@ -126,7 +126,7 @@ export function App() {
         <Route path="/admin/companies" element={<Companies />} />
         <Route path="/admin/integrations" element={P(['integrations.manage'], <Integrations />)} />
 
-        <Route path="*" element={<EmptyState title="Page not found" hint="Check the address or pick a page from the menu" />} />
+        <Route path="*" element={<EmptyState title="Page not found" hint="Check the address or pick a page from the menu" illustration="empty.not-found" />} />
       </Routes>
     </Layout>
   );

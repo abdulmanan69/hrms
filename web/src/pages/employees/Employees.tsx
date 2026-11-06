@@ -251,6 +251,7 @@ export function Employees() {
               <EmptyState
                 bare
                 title={anyFilter || status !== 'all' ? 'No employees match these filters' : 'No employees yet'}
+                illustration={anyFilter || status !== 'all' ? undefined : 'employees.empty'}
                 hint={
                   anyFilter || status !== 'all'
                     ? 'Clear the search or filters to see everyone'

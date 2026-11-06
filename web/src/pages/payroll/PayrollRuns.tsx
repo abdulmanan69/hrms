@@ -46,6 +46,7 @@ export function PayrollRuns() {
       ) : runs.data!.data.length === 0 ? (
         <EmptyState
           title="No payroll runs yet"
+          illustration="payroll.empty"
           hint="Run payroll for a month to compute a payslip for every active employee with a salary structure"
           action={
             can('payroll.manage') && (

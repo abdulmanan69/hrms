@@ -126,6 +126,7 @@ export function Candidates() {
             bare
             title={filtered ? 'No candidates match' : 'No candidates yet'}
             hint={filtered ? 'Try a different search or clear the filters.' : 'Candidates you add appear here with their latest application.'}
+            illustration={filtered ? undefined : 'recruitment.empty'}
             action={
               !filtered && can('recruitment.manage') ? (
                 <button className="btn-primary" onClick={() => setAdding(true)}>

@@ -130,3 +130,34 @@
     animation: none;
   }
 }
+
+/* Illustrations (src/illustrations): line art recoloured from the theme.
+   Accent is a soft brand indigo so the drawings sit quietly in empty states. */
+.illustration {
+  display: inline-block;
+  line-height: 0;
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+.illustration.is-ready {
+  opacity: 1;
+}
+.illustration svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.illustration .il-a {
+  fill: var(--il-accent, #b9c1e6);
+}
+.illustration .il-i {
+  fill: var(--il-ink, #262626);
+}
+.illustration .il-p {
+  fill: var(--il-paper, #ffffff);
+}
+@media (prefers-reduced-motion: reduce) {
+  .illustration {
+    transition: none;
+  }
+}

@@ -1,4 +1,5 @@
 /** Pieces shared by the leave pages: request table, detail and decision modals, balance cards, ledger. */
+import type { IllustrationName } from '../../illustrations/registry';
 import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Paperclip, X } from 'lucide-react';
@@ -94,6 +95,7 @@ export function LeaveTable({
   onOpen,
   emptyTitle,
   emptyHint,
+  emptyIllustration,
   footer,
   allowCancel = false,
 }: {
@@ -105,12 +107,13 @@ export function LeaveTable({
   onOpen: (id: number) => void;
   emptyTitle: string;
   emptyHint?: ReactNode;
+  emptyIllustration?: IllustrationName;
   footer?: ReactNode;
 }) {
   const { approve, cancel } = useLeaveActions();
   const [rejecting, setRejecting] = useState<LeaveApplication | null>(null);
   const [cancelling, setCancelling] = useState<LeaveApplication | null>(null);
-  if (rows.length === 0) return <EmptyState bare title={emptyTitle} hint={emptyHint} />;
+  if (rows.length === 0) return <EmptyState bare title={emptyTitle} hint={emptyHint} illustration={emptyIllustration} />;
   return (
     <>
       <div className="overflow-x-auto">
