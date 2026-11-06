@@ -140,7 +140,7 @@ Many systems (a dialer, a door-access system, a ticket desk) know staff by their
 | `PUT /connect/:system/links` `{ links: [{ sipId, externalId, context? }] }` | employees.manage | Link accounts (bulk, up to 2,000) |
 | `DELETE /connect/:system/links` `{ externalId, context? }` | employees.manage | Unlink |
 | `POST /connect/:system/metrics` `{ items: [{ externalId \| sipId, metric, period, value, unit?, details? }] }` | metrics.write | Report figures per person: `period` is `YYYY-MM` or a date; the same person, metric and period replaces the value. Unknown accounts come back in `unknown` |
-| `POST /connect/:system/sales` `{ context?, window?: { from, to }, items: [{ externalRef, saleDate, closer?, fronter?, closerSipId?, fronterSipId?, reference?, amount? }] }` | sales.write | Report sales (below) |
+| `POST /connect/:system/sales` `{ context?, window?: { from, to }, accounts?: { system, context? }, items: [{ externalRef, saleDate, closer?, fronter?, closerSipId?, fronterSipId?, reference?, amount? }] }` | sales.write | Report sales (below) |
 | `GET /connect/employees/:sipId` | can read the employee | One person's accounts and latest figures |
 
 `context` tells apart equal user names in several instances of the same system (e.g. two dialers); leave it empty otherwise.
@@ -149,11 +149,15 @@ Many systems (a dialer, a door-access system, a ticket desk) know staff by their
 
 - **Sending again is safe.** A sale is stored once per `externalRef` and role, and resending updates it.
 - **`window` keeps HRMS in step.** HRMS voids this system's sales dated in `window` (at most 62 days) that are missing from `items`. Send every sale in the window, split into requests of whole days, at most 2,000 sales each.
+- **Several ids per person.** `closer` and `fronter` can be a list of up to 10 candidate accounts, such as every dialer user a person has. The first that belongs to an employee counts.
+- **Accounts from another system.** A system that knows people by another system's ids sends `accounts`. For example, the CRM sends VICIdial users with `accounts: { system: 'vicidial' }`, so the existing VICIdial links, and SIP IDs equal to the VICIdial user, are used.
 - **People's decisions stay.** A sale someone voided in HRMS is never restored by a sync.
 - **Paid months are final.** Months whose payroll is approved or paid never change; they are counted in `locked`.
 - **The answer** is `{ received, inserted, updated, unchanged, voided, locked, unknown }`. `unknown` lists accounts not linked to anyone yet.
 
 The VICIdial QA platform has a ready-made kit using all of this: [integrations/vicidial](../integrations/vicidial/README.md).
+
+The CRM (crm.vertexpakistan.com) sends compliance-approved sales (`closed_won`) every hour as system `crm`, from the 1st of last month to today. This is `backend/utils/hrmsSync.js` in the CRM repo. These are the sales of record for incentives.
 
 ## Event types
 

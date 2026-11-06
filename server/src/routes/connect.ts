@@ -379,6 +379,11 @@ export async function connectRoutes(app: FastifyInstance): Promise<void> {
    * that date range that are not in `items` are voided (the sale was undone
    * in the source). A sale a person voided by hand stays voided. Months with
    * approved or paid payroll are never changed.
+   *
+   * `closer` and `fronter` may be one account or a list of candidates (a
+   * person with several dialer users): the first that belongs to an employee
+   * counts. `accounts` says which system those ids belong to when it is not
+   * the sender, e.g. a CRM sending VICIdial users: { system: 'vicidial' }.
    */
   app.post('/:system/sales', { preHandler: requirePermission('sales.write') }, async (req) => {
     const { system } = systemParam.parse(req.params);
@@ -387,14 +392,15 @@ export async function connectRoutes(app: FastifyInstance): Promise<void> {
       .object({
         context: contextStr,
         window: z.object({ from: isoDate, to: isoDate }).optional(),
+        accounts: z.object({ system: systemParam.shape.system, context: contextStr }).optional(),
         items: z
           .array(
             z
               .object({
                 externalRef: z.string().trim().min(1).max(100),
                 saleDate: isoDate,
-                closer: externalId.optional(),
-                fronter: externalId.optional(),
+                closer: z.union([externalId, z.array(externalId).min(1).max(10)]).optional(),
+                fronter: z.union([externalId, z.array(externalId).min(1).max(10)]).optional(),
                 closerSipId: z.string().trim().min(1).optional(),
                 fronterSipId: z.string().trim().min(1).optional(),
                 reference: z.string().trim().max(120).optional().nullable(),
@@ -416,9 +422,10 @@ export async function connectRoutes(app: FastifyInstance): Promise<void> {
     const closed = await closedMonths(db);
     const isClosed = (d: string) => closed.has(d.slice(0, 7));
 
-    // accounts → people
-    const accounts = [...new Set(body.items.flatMap((i) => [i.closer, i.fronter]).filter((x): x is string => !!x))];
-    const sipOfAccount = await accountSips(system, ctx, accounts);
+    // accounts → people (candidates in order; the first that is an employee counts)
+    const list = (v: string | string[] | undefined): string[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
+    const accounts = [...new Set(body.items.flatMap((i) => [...list(i.closer), ...list(i.fronter)]))];
+    const sipOfAccount = await accountSips(body.accounts?.system ?? system, body.accounts ? body.accounts.context : ctx, accounts);
     const sipsGiven = [...new Set(body.items.flatMap((i) => [i.closerSipId, i.fronterSipId]).filter((x): x is string => !!x))];
     const knownSips = new Set(
       sipsGiven.length ? (await db.select({ sipId: employees.sipId }).from(employees).where(inArray(employees.sipId, sipsGiven))).map((e) => e.sipId) : [],
@@ -430,12 +437,13 @@ export async function connectRoutes(app: FastifyInstance): Promise<void> {
     let locked = 0;
     for (const i of body.items) {
       for (const r of ['closer', 'fronter'] as const) {
-        const account = i[r];
+        const candidates = list(i[r]);
         const given = r === 'closer' ? i.closerSipId : i.fronterSipId;
-        if (!account && !given) continue;
+        if (!candidates.length && !given) continue;
+        const account = given ? undefined : candidates.find((c) => sipOfAccount.has(c)) ?? candidates[0];
         const sipId = given ? (knownSips.has(given) ? given : null) : sipOfAccount.get(account!) ?? null;
         if (!sipId) {
-          unknown.add(account ?? given!);
+          unknown.add(given ?? candidates.join('|'));
           continue;
         }
         if (isClosed(i.saleDate)) {
