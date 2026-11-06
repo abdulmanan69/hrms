@@ -125,6 +125,37 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
     return { ...row, key };
   });
 
+  /** Rename a key or change what it may do, without re-issuing it to the other system. */
+  app.patch('/keys/:id', manage, async (req) => {
+    if (req.auth.apiKeyId) throw new ForbiddenError('An API key cannot change keys');
+    const { id } = z.object({ id: z.coerce.number().int() }).parse(req.params);
+    const body = z
+      .object({
+        name: z.string().trim().min(2).max(80).optional(),
+        scopes: z.array(z.enum(PERMISSIONS)).min(1, 'Pick at least one permission').optional(),
+      })
+      .parse(req.body);
+    const missing = (body.scopes ?? []).filter((s) => !can(req.auth, s));
+    if (missing.length) throw new ForbiddenError(`You don't hold: ${missing.join(', ')}`);
+    const [before] = await db.select({ name: apiKeys.name, scopes: apiKeys.scopes }).from(apiKeys).where(and(eq(apiKeys.id, id), isNull(apiKeys.revokedAt)));
+    if (!before) throw new NotFoundError('Key not found or revoked');
+    const [row] = await db
+      .update(apiKeys)
+      .set({ ...(body.name ? { name: body.name } : {}), ...(body.scopes ? { scopes: [...new Set(body.scopes)] } : {}) })
+      .where(eq(apiKeys.id, id))
+      .returning({ id: apiKeys.id, name: apiKeys.name, prefix: apiKeys.prefix, scopes: apiKeys.scopes, expiresAt: apiKeys.expiresAt });
+    invalidateApiKeyCache();
+    await writeAudit(db, req, {
+      action: 'update',
+      entity: 'api_key',
+      entityId: id,
+      summary: `changed the API key "${row.name}" (${row.scopes.join(', ')})`,
+      before,
+      after: { name: row.name, scopes: row.scopes },
+    });
+    return row;
+  });
+
   app.post('/keys/:id/revoke', manage, async (req) => {
     const { id } = z.object({ id: z.coerce.number().int() }).parse(req.params);
     const [row] = await db
