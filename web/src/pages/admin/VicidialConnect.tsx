@@ -53,7 +53,7 @@ function KeyStep() {
   const { can } = useAuth();
   const qc = useQueryClient();
   const [made, setMade] = useState<string | null>(null);
-  const [hookUrl, setHookUrl] = useState('');
+  const [hookUrl, setHookUrl] = useState('https://qa.vertexpakistan.com/api/v1/hrms/webhook/');
   const [secret, setSecret] = useState<string | null>(null);
   const grantable = SCOPES.filter((s) => can(s as never));
   const key = useMutation({
@@ -94,30 +94,29 @@ function KeyStep() {
         {made ? (
           <>
             <p className="text-sm text-ink-2">
-              Add these two lines to the VICIdial project's <span className="num">.env</span>, then follow the kit in <span className="num">integrations/vicidial</span>. The key is
-              shown once.
+              In the QA platform open <span className="font-medium">Admin → Connections → Outgoing links</span>, pick this company, and paste the HR address and key into the{' '}
+              <span className="font-medium">HR system</span> card. Click Test, then Save. The key is shown once.
             </p>
-            <CopyBlock text={`HRMS_URL=${origin}\nHRMS_API_KEY=${made}`} />
+            <CopyBlock text={`HR address: ${origin}\nAPI key:    ${made}`} />
           </>
         ) : (
-          <p className="text-sm text-ink-2">
-            The key is shown once, with the lines to paste into VICIdial's <span className="num">.env</span>.
-          </p>
+          <p className="text-sm text-ink-2">The key is shown once, with what to paste into the QA platform's Outgoing links screen. No server settings to edit.</p>
         )}
         <div className="border-t border-line pt-4">
           <p className="text-sm">Optional: tell VICIdial at once when someone leaves, returns or goes on leave</p>
           <div className="mt-2 flex flex-wrap items-end gap-2">
             <Field label="VICIdial webhook URL" className="min-w-[320px] flex-1">
-              <input className="input num" value={hookUrl} onChange={(e) => setHookUrl(e.target.value)} placeholder="https://qa.example.com/api/v1/hrms/webhook/<qa company slug>" />
+              <input className="input num" value={hookUrl} onChange={(e) => setHookUrl(e.target.value)} placeholder="https://qa.vertexpakistan.com/api/v1/hrms/webhook/<qa company slug>" />
             </Field>
-            <button className="btn-secondary" disabled={!/^https?:\/\/.+/.test(hookUrl.trim()) || hook.isPending || !!secret} onClick={() => hook.mutate()}>
+            <button className="btn-secondary" disabled={!/^https?:\/\/.+[^/]$/.test(hookUrl.trim()) || hook.isPending || !!secret} onClick={() => hook.mutate()}>
               <Link2 {...ICON} className="text-ink-3" /> Add webhook
             </button>
           </div>
           <FormError message={hook.error?.message} />
           {secret && (
             <div className="mt-3">
-              <CopyBlock text={`HRMS_WEBHOOK_SECRET=${secret}`} />
+              <p className="mb-2 text-sm text-ink-2">Paste this into the same HR system card in QA, under Webhook secret.</p>
+              <CopyBlock text={`Webhook secret: ${secret}`} />
             </div>
           )}
         </div>

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { api, type Paged } from "../../lib/api";
 import { VicidialConnect } from "./VicidialConnect";
+import { CrmConnect } from "./CrmConnect";
 import { useAuth } from "../../lib/auth";
 import { dateTime, label as toLabel } from "../../lib/format";
 import {
@@ -83,7 +84,7 @@ const KEY = ["integrations"];
 
 export function Integrations() {
   const [tab, setTab] = useState<
-    "overview" | "keys" | "webhooks" | "vicidial" | "guide"
+    "overview" | "keys" | "webhooks" | "vicidial" | "crm" | "guide"
   >("overview");
   const ov = useQuery({
     queryKey: [...KEY, "overview"],
@@ -109,7 +110,8 @@ export function Integrations() {
             label: "Webhooks",
             count: ov.data?.activeWebhooks,
           },
-          { value: "vicidial", label: "VICIdial" },
+          { value: "vicidial", label: "QA platform (VICIdial)" },
+          { value: "crm", label: "CRM" },
           { value: "guide", label: "Developer guide" },
         ]}
       />
@@ -125,6 +127,7 @@ export function Integrations() {
             <WebhooksTab catalog={ov.data!.eventCatalog} />
           )}
           {tab === "vicidial" && <VicidialConnect />}
+          {tab === "crm" && <CrmConnect />}
           {tab === "guide" && <Guide catalog={ov.data!.eventCatalog} />}
         </>
       )}
