@@ -54,6 +54,11 @@ services:
       SEED_DEMO: ${SEED_DEMO:-false}
       UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-10}
       TZ_BUSINESS: ${TZ_BUSINESS:-Asia/Karachi}
+      # remote diagnostics (README → Remote diagnostics): a 32+ character secret
+      # turns on the read-only /api/v1/ops endpoints; empty = off
+      OPS_TOKEN: ${OPS_TOKEN:-}
+      OPS_ALLOWED_IPS: ${OPS_ALLOWED_IPS:-}
+      SOURCE_COMMIT: ${SOURCE_COMMIT:-}
     depends_on:
       postgres:
         condition: service_healthy

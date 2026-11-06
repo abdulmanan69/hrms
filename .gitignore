@@ -18,3 +18,6 @@ backup-*
 scratch-*
 .DS_Store
 Thumbs.db
+
+# remote diagnostics token (scripts/ops.mjs)
+.ops.local

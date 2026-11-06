@@ -50,6 +50,13 @@
       "when": 1793964730448,
       "tag": "0006_sales",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793967165444,
+      "tag": "0007_ops-log",
+      "breakpoints": true
     }
   ]
 }

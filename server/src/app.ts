@@ -24,6 +24,8 @@ import { platformRoutes } from './routes/platform.js';
 import { integrationRoutes } from './routes/integrations.js';
 import { connectRoutes } from './routes/connect.js';
 import { salesRoutes } from './routes/sales.js';
+import { opsRoutes } from './routes/ops.js';
+import { pinoLogMethod, recordRequest } from './lib/opsLog.js';
 import { realtimeSocketRoute, realtimeTicketRoutes } from './routes/realtime.js';
 import { invalidateApiKeyCache } from './services/apiKeys.js';
 import { runInCompany } from './db/client.js';
@@ -39,7 +41,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
       level: config.NODE_ENV === 'production' ? 'info' : 'debug',
-      redact: ['req.headers.authorization', 'req.headers.cookie'],
+      redact: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-ops-token"]'],
+      // warnings, errors and job reports are also kept for remote diagnostics (routes/ops.ts)
+      hooks: { logMethod: pinoLogMethod },
     },
     // only the proxies in front of the API (nginx, plus any TLS proxy) may set the client IP;
     // trusting every X-Forwarded-For would let anyone dodge the sign-in rate limit
@@ -152,6 +156,16 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   app.get('/healthz', async () => ({ ok: true, ts: new Date().toISOString() }));
+
+  // request timing for diagnostics; the route pattern, never the URL with its ids
+  app.addHook('onResponse', async (req, reply) => {
+    const route = req.routeOptions.url ?? 'unmatched';
+    if (route === '/healthz' || route.startsWith('/api/v1/ops')) return;
+    recordRequest(req.method, route, reply.statusCode, reply.elapsedTime);
+  });
+
+  // remote diagnostics: its own token instead of a session; absent unless OPS_TOKEN is set
+  await app.register(opsRoutes, { prefix: '/api/v1/ops' });
 
   await app.register(authRoutes, { prefix: '/api/v1/auth' });
   // real-time socket: signs in itself (API key, session or one-time ticket)

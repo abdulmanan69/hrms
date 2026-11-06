@@ -41,6 +41,18 @@ const envSchema = z.object({
   UPLOAD_MAX_MB: z.coerce.number().default(10),
   /** IANA zone for "today" in leave and payroll dates */
   TZ_BUSINESS: z.string().default('Asia/Karachi'),
+  /**
+   * Remote diagnostics (routes/ops.ts, scripts/ops.mjs): a secret of 32+
+   * characters turns on the read-only /api/v1/ops endpoints. Empty = off.
+   */
+  OPS_TOKEN: z
+    .string()
+    .default('')
+    .refine((v) => v === '' || v.length >= 32, 'OPS_TOKEN: at least 32 characters, or empty to turn diagnostics off'),
+  /** optional: only these IPs or IPv4 CIDR ranges may use /api/v1/ops (comma-separated) */
+  OPS_ALLOWED_IPS: z.string().default(''),
+  /** set by Coolify when "Include Source Commit in Build" is on; shown in diagnostics */
+  SOURCE_COMMIT: z.string().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);

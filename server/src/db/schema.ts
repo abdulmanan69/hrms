@@ -25,6 +25,7 @@
  */
 import { sql } from 'drizzle-orm';
 import {
+  bigserial,
   boolean,
   customType,
   date,
@@ -918,6 +919,25 @@ export const sales = pgTable(
     index('sales_date_idx').on(t.companyId, t.saleDate),
     index('sales_sip_date_idx').on(t.companyId, t.sipId, t.saleDate),
   ],
+);
+
+/**
+ * Diagnostics log for the remote ops endpoints (routes/ops.ts): warnings and
+ * errors, background job reports and boots. Platform-wide, written and read
+ * only by the owner connection; requests (hrms_app) cannot reach it. Pruned
+ * to 14 days.
+ */
+export const opsLog = pgTable(
+  'ops_log',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    t: ts('t').notNull().defaultNow(),
+    /** 'info' | 'warn' | 'error' | 'fatal' | 'boot' */
+    lvl: text('lvl').notNull(),
+    msg: text('msg').notNull(),
+    ctx: jsonb('ctx'),
+  },
+  (t) => [index('ops_log_t_idx').on(t.t), index('ops_log_lvl_t_idx').on(t.lvl, t.t)],
 );
 
 /** Tables that belong to a company and are row-secured (migrations 0002, 0004, 0005, 0006). */

@@ -53,6 +53,27 @@ web (nginx :3000) ──/api──▶ api (Fastify :8080) ──▶ postgres (:5
 4. **Set the admin password.** In Environment Variables, set `ADMIN_PASSWORD`, plus `ADMIN_EMAIL`, `COMPANY_NAME` and `COMPANY_SLUG` if they differ from the defaults. Coolify generates the database password.
 5. **Deploy.** After each push to `main`, press *Redeploy* in Coolify. To redeploy on every push instead, add the webhook from the resource's *Webhooks* page to the GitHub repository.
 
+### Remote diagnostics
+
+See inside a running instance from any computer, without SSH or a login: problems, errors, logs, API timing and the database. It stays off until a token is set.
+
+1. **Make a token.** On your computer, in this repository, run `node scripts/ops.mjs init --url https://your-hrms`. It writes `.ops.local` (git ignores it) with a new random token.
+2. **Give it to the server.** Copy `OPS_TOKEN` from `.ops.local` to the server (Coolify: Environment Variables; Docker: `.env`) and redeploy.
+3. **Use it.** Run `node scripts/ops.mjs status`.
+
+| Command | Shows |
+| --- | --- |
+| `status` | API, database, connection pool, requests, webhooks, integrations and background jobs at a glance, a list of problems, every company's counts, recent starts |
+| `errors [--since 24h] [--list]` | warnings and errors grouped by message, with stack traces |
+| `logs [--since 1h] [--grep text] [--level warn] [--follow]` | everything logged, live with `--follow` |
+| `requests` | API timing per minute and per route, requests slower than 1 s |
+| `db` | connections, running queries, table sizes |
+
+- **Logs survive restarts and crashes.** They are kept in the `ops_log` table for 14 days.
+- **Secrets are masked** before anything is stored: API keys, passwords, tokens, CNIC and account numbers.
+- **No people's records.** The endpoints return only counts, timings and log lines, and there is no SQL endpoint.
+- **Limit who can call it.** `OPS_ALLOWED_IPS` (IPs or IPv4 CIDR, comma-separated) restricts access further.
+
 ### Backups
 
 Uploaded documents are stored compressed inside Postgres, so one dump holds everything:
