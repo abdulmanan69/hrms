@@ -45,7 +45,10 @@ export type Permission =
   | 'metrics.write'
   | 'sales.view'
   | 'sales.manage'
-  | 'sales.write';
+  | 'sales.write'
+  | 'attendance.view'
+  | 'attendance.manage'
+  | 'attendance.write';
 
 export interface CompanyOption {
   id: number;

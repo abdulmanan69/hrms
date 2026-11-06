@@ -42,6 +42,12 @@ export const PERMISSIONS = [
   'sales.manage',
   /** other systems (e.g. VICIdial) report sales */
   'sales.write',
+  /** everyone's attendance; team.view holders see their reports' */
+  'attendance.view',
+  /** set days by hand, attendance rules */
+  'attendance.manage',
+  /** other systems (e.g. the QA platform) report attendance from dialer calls */
+  'attendance.write',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -69,6 +75,7 @@ export const ROLE_PRESETS: Record<string, { label: string; description: string; 
       'payroll.approve',
       'leave.view',
       'sales.view',
+      'attendance.view',
     ],
   },
   sales: {

@@ -14,7 +14,7 @@ type Person = { sipId: string; name: string; status: string; department: string 
 type Suggestion = { sipId: string; name: string; department: string | null; score: number; alreadyLinked: boolean };
 type Row = { externalId: string; context: string; fullName: string; linkedTo: string | null; suggestions: Suggestion[] };
 
-const SCOPES = ['employees.view', 'leave.view', 'metrics.write', 'sales.write'];
+const SCOPES = ['employees.view', 'leave.view', 'metrics.write', 'sales.write', 'attendance.write'];
 const EVENTS = ['employee.created', 'employee.updated', 'employee.activated', 'employee.deactivated', 'employee.reactivated', 'leave_application.approved', 'leave_application.cancelled'];
 
 function CopyBlock({ text }: { text: string }) {

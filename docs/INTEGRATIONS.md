@@ -141,6 +141,8 @@ Many systems (a dialer, a door-access system, a ticket desk) know staff by their
 | `DELETE /connect/:system/links` `{ externalId, context? }` | employees.manage | Unlink |
 | `POST /connect/:system/metrics` `{ items: [{ externalId \| sipId, metric, period, value, unit?, details? }] }` | metrics.write | Report figures per person: `period` is `YYYY-MM` or a date; the same person, metric and period replaces the value. Unknown accounts come back in `unknown` |
 | `POST /connect/:system/sales` `{ context?, window?: { from, to }, accounts?: { system, context? }, items: [{ externalRef, saleDate, closer?, fronter?, closerSipId?, fronterSipId?, reference?, amount? }] }` | sales.write | Report sales (below) |
+| `GET /connect/:system/attendance/settings` | attendance.write | How shift days are cut: `{ timeZone, dayStartsAt }` |
+| `POST /connect/:system/attendance` `{ context?, accounts?, window: { from, to }, items: [{ account, day, firstAt, lastAt, calls, talkSec }] }` | attendance.write | Report dialer activity per person and shift day (below) |
 | `GET /connect/employees/:sipId` | can read the employee | One person's accounts and latest figures |
 
 `context` tells apart equal user names in several instances of the same system (e.g. two dialers); leave it empty otherwise.
@@ -156,6 +158,14 @@ Many systems (a dialer, a door-access system, a ticket desk) know staff by their
 - **The answer** is `{ received, inserted, updated, unchanged, voided, locked, unknown }`. `unknown` lists accounts not linked to anyone yet.
 
 The VICIdial QA platform has a ready-made kit using all of this: [integrations/vicidial](../integrations/vicidial/README.md).
+
+**Attendance.** A system reports, for each person and shift day, the first and last call, the number of calls and talk time. HRMS works out each day's status when it is shown, so a rule change in **Attendance → Rules** also re-judges past days. The statuses are present, late, half day, absent, leave and off.
+
+- **Shift days.** A shift day runs from `dayStartsAt` local time to the same time the next day, and is dated the day it began. Read `/attendance/settings` first and cut days the same way.
+- **`window` is replaced.** This system's days in the window that are missing from `items` are removed. Send every person's days for the window, at most 62 days and 5,000 items per request.
+- **`account`** can be one account or a list of up to 10 candidates. Several accounts of one person on one day are merged.
+- **Days HR set by hand are never touched by a sync.** A day set by hand wins when the day is shown.
+- **The answer** is `{ received, saved, unchanged, removed, locked, unknown }`.
 
 The CRM (crm.vertexpakistan.com) sends compliance-approved sales (`closed_won`) every hour as system `crm`, from the 1st of last month to today. This is `backend/utils/hrmsSync.js` in the CRM repo. These are the sales of record for incentives.
 

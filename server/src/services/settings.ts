@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.js';
 import { settings } from '../db/schema.js';
+import { DEFAULT_ATTENDANCE, type AttendanceSettings } from './attendance.js';
 
 /**
  * Payroll rules. Defaults follow common Pakistani practice and the Finance Act
@@ -79,6 +80,7 @@ export const DEFAULT_SETTINGS = {
     includeInPayroll: true,
   } satisfies IncentiveSettings as IncentiveSettings,
   company: { name: 'WaveTech', currency: 'PKR' } satisfies CompanySettings as CompanySettings,
+  attendance: DEFAULT_ATTENDANCE as AttendanceSettings,
 };
 
 export type SettingKey = keyof typeof DEFAULT_SETTINGS;

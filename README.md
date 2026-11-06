@@ -8,7 +8,8 @@ Modules:
 - **Employees** – the staff register, documents, and activation checks (CNIC and signed contract required)
 - **Payroll** – salary structures with history, monthly runs computed as A + B − C with mid-month proration, loans and advances, CSV and bank files, and printable payslips
 - **Leave** – leave types, a balance ledger, approvals (HR or line manager), and unpaid days that flow into payroll
-- **Sales** – sales credited to closers and fronters (from VICIdial or recorded by hand), slab-based incentives that flow into payroll
+- **Sales** – sales credited to closers and fronters (the CRM's compliance-approved sales, or recorded by hand), slab-based incentives that flow into payroll
+- **Attendance** – shift days from the dialer (first and last call, reported by the QA platform), judged present, late, half day or absent by HR's rules; HR can set any day by hand
 - **Shared core** – users and roles, an audit trail, notifications, and self-service for each employee
 
 ## Run it with Docker

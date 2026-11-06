@@ -69,6 +69,7 @@ export const ENTITY_MODULE: Record<string, string> = {
   employee_metric: 'employees.view',
   sale: 'sales.view',
   incentive_plan: 'sales.view',
+  attendance_day: 'attendance.view',
   webhook: 'integrations.manage',
 };
 

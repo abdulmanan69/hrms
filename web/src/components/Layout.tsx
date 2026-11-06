@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Banknote,
   BadgeDollarSign,
+  CalendarCheck,
+  Clock,
   TrendingUp,
   Bell,
   Building,
@@ -55,6 +57,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
       { to: '/me/leave', label: 'My leave', icon: <CalendarPlus {...ICON} />, self: true },
       { to: '/me/payslips', label: 'My payslips', icon: <ReceiptText {...ICON} />, self: true },
       { to: '/me/sales', label: 'My sales', icon: <BadgeDollarSign {...ICON} />, self: true },
+      { to: '/me/attendance', label: 'My attendance', icon: <Clock {...ICON} />, self: true },
     ],
   },
   {
@@ -89,6 +92,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
   {
     group: 'Leave',
     items: [
+      { to: '/attendance', label: 'Attendance', icon: <CalendarCheck {...ICON} />, perms: ['attendance.view', 'attendance.manage', 'team.view'] },
       { to: '/leave/requests', label: 'Requests', icon: <CalendarDays {...ICON} />, perms: ['leave.view', 'leave.approve', 'leave.approve.team'], count: 'leave' },
       { to: '/leave/balances', label: 'Balances', icon: <ClipboardList {...ICON} />, perms: ['leave.view', 'leave.manage', 'leave.approve.team'] },
       { to: '/leave/types', label: 'Leave types', icon: <Tags {...ICON} />, perms: ['leave.manage'] },

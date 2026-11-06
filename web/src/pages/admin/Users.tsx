@@ -64,6 +64,9 @@ const PERMISSION_TEXT: Record<string, string> = {
   'sales.view': 'See every sale and incentive (team.view: their reports’ only)',
   'sales.manage': 'Record and void sales, set incentive slabs',
   'sales.write': 'Report sales from another system (VICIdial)',
+  'attendance.view': "See everyone's attendance",
+  'attendance.manage': 'Set attendance days by hand and change the rules',
+  'attendance.write': 'Report attendance from another system (the QA platform)',
 };
 
 export function Users() {

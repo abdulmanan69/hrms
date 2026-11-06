@@ -9,6 +9,8 @@
  *   DELETE /connect/:system/links                     unlink one account
  *   POST   /connect/:system/metrics                   report figures per account
  *   POST   /connect/:system/sales                     report sales (closer and fronter credit)
+ *   GET    /connect/:system/attendance/settings       how shift days are cut (time zone, boundary)
+ *   POST   /connect/:system/attendance                report dialer activity per person and shift day
  *   GET    /connect/employees/:sipId                  one person's accounts and figures
  *
  * All of it is company-scoped like every other route; an API key sees only
@@ -19,13 +21,14 @@ import { and, asc, desc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { db } from '../db/client.js';
-import { departments, designations, employeeLinks, employeeMetrics, employees, leaveApplications, leaveTypes, sales } from '../db/schema.js';
+import { attendanceDays, departments, designations, employeeLinks, employeeMetrics, employees, leaveApplications, leaveTypes, sales } from '../db/schema.js';
 import { assertCanReadEmployee, can, requirePermission } from '../auth/plugin.js';
 import { writeAudit } from '../lib/audit.js';
 import { addDays, todayISO } from '../lib/dates.js';
 import { ValidationError } from '../lib/errors.js';
 import { employeeNameSql } from '../services/people.js';
 import { closedMonths } from '../services/sales.js';
+import { getSetting } from '../services/settings.js';
 
 const systemParam = z.object({ system: z.string().regex(/^[a-z][a-z0-9_-]{1,31}$/, 'System names are lowercase, e.g. vicidial') });
 const externalId = z.string().trim().min(1).max(100);
@@ -569,6 +572,125 @@ export async function connectRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /** One person's accounts in other systems and their latest figures (for the profile). */
+  /** How a reporting system must cut shift days, so both sides agree on what "a day" is. */
+  app.get('/:system/attendance/settings', { preHandler: requirePermission('attendance.write', 'attendance.view') }, async () => {
+    const s = await getSetting(db, 'attendance');
+    return { timeZone: s.timeZone, dayStartsAt: s.dayStartsAt };
+  });
+
+  /**
+   * Dialer activity per person and shift day: first call, last call, calls,
+   * talk time. The window is replaced: this system's days in it that are not
+   * in `items` are removed (the activity is gone at the source). Several
+   * accounts of one person on one day are merged. Days HR set by hand are
+   * never touched; they simply win when the day is shown.
+   */
+  app.post('/:system/attendance', { preHandler: requirePermission('attendance.write') }, async (req) => {
+    const { system } = systemParam.parse(req.params);
+    const isoDate = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, 'Dates are YYYY-MM-DD');
+    const account =z.union([externalId, z.array(externalId).min(1).max(10)]);
+    const body = z
+      .object({
+        context: contextStr,
+        accounts: z.object({ system: systemParam.shape.system, context: contextStr }).optional(),
+        window: z.object({ from: isoDate, to: isoDate }),
+        items: z
+          .array(
+            z.object({
+              account,
+              day: isoDate,
+              firstAt: z.string().datetime({ offset: true }),
+              lastAt: z.string().datetime({ offset: true }),
+              calls: z.number().int().min(0).max(100_000),
+              talkSec: z.number().int().min(0).max(86_400 * 2),
+            }),
+          )
+          .max(5000),
+      })
+      .parse(req.body);
+    const w = body.window;
+    if (w.from > w.to) throw new ValidationError('window.from is after window.to');
+    if ((Date.parse(w.to) - Date.parse(w.from)) / 86_400_000 > 62) throw new ValidationError('A window covers at most 62 days');
+    const outside = body.items.find((i) => i.day < w.from || i.day > w.to);
+    if (outside) throw new ValidationError(`A day (${outside.day}) is outside the window`);
+    if (system === 'manual') throw new ValidationError("'manual' is reserved for days HR sets by hand");
+    const ctx = body.context;
+
+    const list = (v: string | string[]) => (Array.isArray(v) ? v : [v]);
+    const accounts = [...new Set(body.items.flatMap((i) => list(i.account)))];
+    const sipOf = await accountSips(body.accounts?.system ?? system, body.accounts ? body.accounts.context : ctx, accounts);
+
+    type Want = { sipId: string; day: string; firstAt: Date; lastAt: Date; calls: number; talkSec: number; accounts: Set<string> };
+    const wanted = new Map<string, Want>();
+    const unknown = new Set<string>();
+    for (const i of body.items) {
+      const cands = list(i.account);
+      const acc = cands.find((c) => sipOf.has(c));
+      if (!acc) {
+        unknown.add(cands.join('|'));
+        continue;
+      }
+      const sipId = sipOf.get(acc)!;
+      const k = `${sipId} ${i.day}`;
+      const first = new Date(i.firstAt);
+      const last = new Date(i.lastAt);
+      const cur = wanted.get(k);
+      if (!cur) {
+        wanted.set(k, { sipId, day: i.day, firstAt: first, lastAt: last < first ? first : last, calls: i.calls, talkSec: i.talkSec, accounts: new Set([acc]) });
+      } else {
+        if (first < cur.firstAt) cur.firstAt = first;
+        if (last > cur.lastAt) cur.lastAt = last;
+        cur.calls += i.calls;
+        cur.talkSec += i.talkSec;
+        cur.accounts.add(acc);
+      }
+    }
+
+    const existing = await db
+      .select()
+      .from(attendanceDays)
+      .where(and(eq(attendanceDays.source, system), eq(attendanceDays.context, ctx), gte(attendanceDays.day, w.from), lte(attendanceDays.day, w.to)));
+    const stored = new Map(existing.map((e) => [`${e.sipId} ${e.day}`, e]));
+    let saved = 0;
+    let unchanged = 0;
+    for (const [k, v] of wanted) {
+      const cur = stored.get(k);
+      const accs = [...v.accounts].sort().join(',');
+      if (
+        cur &&
+        cur.firstAt?.getTime() === v.firstAt.getTime() &&
+        cur.lastAt?.getTime() === v.lastAt.getTime() &&
+        cur.calls === v.calls &&
+        cur.talkSec === v.talkSec &&
+        cur.accounts === accs
+      ) {
+        unchanged++;
+        continue;
+      }
+      await db
+        .insert(attendanceDays)
+        .values({ sipId: v.sipId, day: v.day, source: system, context: ctx, firstAt: v.firstAt, lastAt: v.lastAt, calls: v.calls, talkSec: v.talkSec, accounts: accs })
+        .onConflictDoUpdate({
+          target: [attendanceDays.companyId, attendanceDays.sipId, attendanceDays.day, attendanceDays.source, attendanceDays.context],
+          set: { firstAt: v.firstAt, lastAt: v.lastAt, calls: v.calls, talkSec: v.talkSec, accounts: accs, updatedAt: new Date() },
+        });
+      saved++;
+    }
+    const gone = existing.filter((e) => !wanted.has(`${e.sipId} ${e.day}`)).map((e) => e.id);
+    if (gone.length) await db.delete(attendanceDays).where(inArray(attendanceDays.id, gone));
+
+    if (saved || gone.length) {
+      await writeAudit(db, req, {
+        action: 'update',
+        entity: 'attendance_day',
+        entityId: system,
+        summary: `received attendance from ${label(system)} for ${w.from} to ${w.to}: ${saved} day${saved === 1 ? '' : 's'} updated${gone.length ? `, ${gone.length} removed` : ''}`,
+        after: { system, window: w, saved, removed: gone.length },
+      });
+    }
+    return { system, received: body.items.length, saved, unchanged, removed: gone.length, locked: 0, unknown: [...unknown] };
+  });
+
   app.get('/employees/:sipId', async (req) => {
     const { sipId } = z.object({ sipId: z.string().min(1) }).parse(req.params);
     await assertCanReadEmployee(req.auth, sipId);

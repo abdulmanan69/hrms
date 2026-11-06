@@ -922,6 +922,44 @@ export const sales = pgTable(
 );
 
 /**
+ * Attendance facts per person and shift day (services/attendance.ts). A
+ * system such as the QA platform reports each day's first and last call,
+ * calls and talk time (source = that system); HR can set a day by hand
+ * (source 'manual', with a status). The status a day shows is worked out
+ * when read, from these facts, leave and the attendance settings.
+ */
+export const attendanceDays = pgTable(
+  'attendance_days',
+  {
+    id: serial('id').primaryKey(),
+    companyId: companyId(),
+    sipId: text('sip_id').notNull(),
+    /** the shift day, dated the day it began */
+    day: date('day', { mode: 'string' }).notNull(),
+    /** 'manual', or the system that reported it ('vicidial') */
+    source: text('source').notNull(),
+    context: text('context').notNull().default(''),
+    firstAt: ts('first_at'),
+    lastAt: ts('last_at'),
+    calls: integer('calls').notNull().default(0),
+    talkSec: integer('talk_sec').notNull().default(0),
+    /** only on manual rows: the status HR set */
+    status: text('status'),
+    note: text('note'),
+    /** the accounts the system reported this under, e.g. 'ETC0959' */
+    accounts: text('accounts'),
+    createdBy: integer('created_by').references((): AnyPgColumn => users.id),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({ name: 'attendance_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }).onUpdate('cascade'),
+    uniqueIndex('attendance_day_uq').on(t.companyId, t.sipId, t.day, t.source, t.context),
+    index('attendance_day_idx').on(t.companyId, t.day),
+  ],
+);
+
+/**
  * Diagnostics log for the remote ops endpoints (routes/ops.ts): warnings and
  * errors, background job reports and boots. Platform-wide, written and read
  * only by the owner connection; requests (hrms_app) cannot reach it. Pruned
@@ -973,4 +1011,5 @@ export const TENANT_TABLES = [
   'employee_links',
   'employee_metrics',
   'sales',
+  'attendance_days',
 ] as const;
