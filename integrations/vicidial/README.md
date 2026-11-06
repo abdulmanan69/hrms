@@ -50,6 +50,18 @@ HRMS_WEBHOOK_SECRET=whsec_…              # or HRMS_WEBHOOK_SECRETS=acme=whsec_
 
 The kit reads these directly, so `config.ts` doesn't change. In Docker they reach the `api` and `worker` containers through the existing `env_file: .env`.
 
+On Coolify there is no `.env` file. Set the values in the app's Environment Variables tab, and add them to `x-app-env` in `docker-compose.coolify.yml` so both containers get them:
+
+```yaml
+  HRMS_URL: ${HRMS_URL:-}
+  HRMS_API_KEY: ${HRMS_API_KEY:-}
+  HRMS_API_KEYS: ${HRMS_API_KEYS:-}
+  HRMS_WEBHOOK_SECRET: ${HRMS_WEBHOOK_SECRET:-}
+  HRMS_WEBHOOK_SECRETS: ${HRMS_WEBHOOK_SECRETS:-}
+  HRMS_CONTEXT: ${HRMS_CONTEXT:-}
+  HRMS_TZ: ${HRMS_TZ:-Asia/Karachi}
+```
+
 ### Register the routes in `server/src/app.ts`
 
 ```ts
@@ -68,8 +80,10 @@ await api.register(hrmsRoutes, { prefix: '/hrms' });
 import { pushQaScores, pushSales } from './integrations/hrms/sync.js';
 
 // with the other schedulers:
-await maintenanceQueue.upsertJobScheduler('hrms-qa-scores', { every: 3600 * 1000 }, { name: 'hrms-qa-scores', opts: keep });
-await maintenanceQueue.upsertJobScheduler('hrms-sales', { every: 3600 * 1000 }, { name: 'hrms-sales', opts: keep });
+for (const name of ['hrms-qa-scores', 'hrms-sales']) {
+  if (process.env.HRMS_URL) await maintenanceQueue.upsertJobScheduler(name, { every: 3600 * 1000 }, { name, opts: keep });
+  else await maintenanceQueue.removeJobScheduler(name).catch(() => false);
+}
 
 // in the maintenance worker's job switch:
 if (job.name === 'hrms-qa-scores') return pushQaScores();
