@@ -2,14 +2,16 @@
  * Jobs that keep the VICIdial QA platform and WaveTech HRMS in step.
  *
  *   pushQaScores()   monthly average QA score per agent → HRMS (metric qa_score, %)
+ *   pushSales()      closed sales, credited to closer and fronter → HRMS sales incentive
  *   employeesFor()   HRMS employee details for a company's agents, cached 5 min
  *
  * Both are read-only on the QA side: nothing in the QA database is changed.
  */
 import { and, eq, gte, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 import { db } from '../../db/client.js';
-import { companies, dialerServers, evaluations, viciAgents } from '../../db/schema.js';
-import { hrmsFor, type HrmsPerson, type MetricItem } from './client.js';
+import { alias } from 'drizzle-orm/pg-core';
+import { agentDispositions, calls, companies, dialerServers, evaluations, transfers, viciAgents } from '../../db/schema.js';
+import { hrmsFor, type HrmsPerson, type MetricItem, type SaleItem, type SalesResult } from './client.js';
 
 /** 'dialer' = HRMS links tell apart equal user names by dialer name (HRMS_CONTEXT=dialer). */
 const useDialerContext = () => process.env.HRMS_CONTEXT === 'dialer';
@@ -72,6 +74,93 @@ export async function pushQaScores(months = 2): Promise<Array<{ company: string;
     if (items.length === 0) continue;
     const r = await hrms.pushMetrics(items);
     result.push({ company: c.slug, ...r });
+  }
+  return result;
+}
+
+/** The HR calendar: a sale counts on its date in this time zone (HRMS_TZ, default Asia/Karachi). */
+const hrTz = () => process.env.HRMS_TZ || 'Asia/Karachi';
+const localDate = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: hrTz() }).format(d);
+const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * Sends every closed sale from the first day of last month until today to the
+ * HRMS, credited to the closer (the agent on the sale call) and the fronter
+ * (the agent who dispositioned the XFER). HRMS pays the sales incentive from
+ * these. Safe to run as often as you like: each run replaces the window, so a
+ * sale that is no longer closed here is voided in HRMS. Months whose HRMS
+ * payroll is approved are left alone by HRMS.
+ */
+export async function pushSales(): Promise<Array<{ company: string } & SalesResult>> {
+  const result: Array<{ company: string } & SalesResult> = [];
+  const today = localDate(new Date());
+  const from = `${addDays(`${today.slice(0, 7)}-01`, -1).slice(0, 7)}-01`;
+  // a day's margin either side in UTC; the exact HR date is filtered below
+  const fromUtc = new Date(Date.parse(`${from}T00:00:00Z`) - 86_400_000);
+  const list = await db.select({ id: companies.id, slug: companies.slug }).from(companies).where(eq(companies.status, 'active'));
+  const closerCall = alias(calls, 'hrms_cc');
+  const fronterCall = alias(calls, 'hrms_fc');
+  for (const c of list) {
+    const hrms = hrmsFor(c.slug);
+    if (!hrms) continue;
+    const saleDay = sql<string>`to_char(${closerCall.callDate} at time zone ${hrTz()}, 'YYYY-MM-DD')`;
+    const rows = await db
+      .select({
+        ref: transfers.id,
+        saleDate: saleDay,
+        closer: closerCall.viciUserRaw,
+        fronter: sql<string | null>`coalesce(${agentDispositions.viciUser}, ${fronterCall.viciUserRaw})`,
+        lead: transfers.viciLeadId,
+        dialer: dialerServers.name,
+      })
+      .from(transfers)
+      .innerJoin(closerCall, sql`${closerCall.id} = coalesce(${transfers.saleCallId}, ${transfers.closerCallId})`)
+      .innerJoin(dialerServers, eq(transfers.dialerServerId, dialerServers.id))
+      .leftJoin(fronterCall, eq(transfers.fronterCallId, fronterCall.id))
+      .leftJoin(agentDispositions, and(eq(agentDispositions.dialerServerId, transfers.dialerServerId), eq(agentDispositions.agentLogId, transfers.agentLogId)))
+      .where(and(eq(transfers.companyId, c.id), eq(transfers.isMock, false), eq(transfers.queueStatus, 'closed'), gte(closerCall.callDate, fromUtc)));
+
+    // one HRMS context per dialer when equal user names exist on several dialers
+    const byContext = new Map<string, Array<SaleItem>>();
+    for (const r of rows) {
+      if (r.saleDate < from || r.saleDate > today || (!r.closer && !r.fronter)) continue;
+      const ctx = useDialerContext() ? r.dialer : '';
+      const items = byContext.get(ctx) ?? [];
+      items.push({
+        externalRef: r.ref,
+        saleDate: r.saleDate,
+        ...(r.closer ? { closer: r.closer } : {}),
+        ...(r.fronter && r.fronter !== r.closer ? { fronter: r.fronter } : {}),
+        reference: r.lead ? `Lead ${r.lead}` : null,
+      });
+      byContext.set(ctx, items);
+    }
+    if (!useDialerContext() && !byContext.has('')) byContext.set('', []);
+
+    const total: SalesResult = { received: 0, inserted: 0, updated: 0, unchanged: 0, voided: 0, locked: 0, unknown: [] };
+    for (const [ctx, items] of byContext) {
+      // whole days per request, at most 2,000 sales each; the windows cover every day
+      items.sort((a, b) => (a.saleDate < b.saleDate ? -1 : 1));
+      let start = from;
+      let batch: SaleItem[] = [];
+      const flush = async (to: string) => {
+        const r = await hrms.pushSales(batch, { from: start, to }, ctx);
+        for (const k of ['received', 'inserted', 'updated', 'unchanged', 'voided', 'locked'] as const) total[k] += r[k];
+        total.unknown.push(...r.unknown);
+        batch = [];
+        start = addDays(to, 1);
+      };
+      let i = 0;
+      for (let day = from; day <= today; day = addDays(day, 1)) {
+        const dayItems: SaleItem[] = [];
+        while (i < items.length && items[i].saleDate === day) dayItems.push(items[i++]);
+        if (batch.length && batch.length + dayItems.length > 2000) await flush(addDays(day, -1));
+        batch.push(...dayItems);
+      }
+      await flush(today);
+    }
+    total.unknown = [...new Set(total.unknown)];
+    result.push({ company: c.slug, ...total });
   }
   return result;
 }

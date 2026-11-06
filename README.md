@@ -8,6 +8,7 @@ Modules:
 - **Employees** – the staff register, documents, and activation checks (CNIC and signed contract required)
 - **Payroll** – salary structures with history, monthly runs computed as A + B − C with mid-month proration, loans and advances, CSV and bank files, and printable payslips
 - **Leave** – leave types, a balance ledger, approvals (HR or line manager), and unpaid days that flow into payroll
+- **Sales** – sales credited to closers and fronters (from VICIdial or recorded by hand), slab-based incentives that flow into payroll
 - **Shared core** – users and roles, an audit trail, notifications, and self-service for each employee
 
 ## Run it with Docker
@@ -41,6 +42,16 @@ web (nginx :3000) ──/api──▶ api (Fastify :8080) ──▶ postgres (:5
 - **api** runs database migrations and the base seed at boot, then serves `/api/v1`. It also runs a leave-accrual job every 6 hours. The job is idempotent: each grant carries a unique reference.
 - **web** is the static React build. nginx proxies `/api` to the api container.
 - Postgres and the API are published on `127.0.0.1` only. Only the web port is meant to be open.
+
+### Deploy on Coolify
+
+`docker-compose.coolify.yml` is the same stack without host ports or a `.env` file.
+
+1. **Create the resource.** New Resource → Public Repository → `https://github.com/abdulmanan69/hrms`, branch `main`.
+2. **Pick the build.** Build Pack *Docker Compose*, location `/docker-compose.coolify.yml`.
+3. **Set the domain** on the `web` service, for example `https://hr.example.com`. The domain's DNS must point at the server first, so the HTTPS certificate can be issued.
+4. **Set the admin password.** In Environment Variables, set `ADMIN_PASSWORD`, plus `ADMIN_EMAIL`, `COMPANY_NAME` and `COMPANY_SLUG` if they differ from the defaults. Coolify generates the database password.
+5. **Deploy.** Pushes to `main` redeploy automatically.
 
 ### Backups
 

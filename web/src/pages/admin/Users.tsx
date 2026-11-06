@@ -61,6 +61,9 @@ const PERMISSION_TEXT: Record<string, string> = {
   'settings.manage': 'Change payroll and leave rules',
   'integrations.manage': 'API keys, webhooks and live events for other systems',
   'metrics.write': 'Report figures per employee from another system (QA scores, hours)',
+  'sales.view': 'See every sale and incentive (team.view: their reports’ only)',
+  'sales.manage': 'Record and void sales, set incentive slabs',
+  'sales.write': 'Report sales from another system (VICIdial)',
 };
 
 export function Users() {

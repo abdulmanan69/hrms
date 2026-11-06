@@ -875,7 +875,52 @@ export const employeeMetrics = pgTable(
   ],
 );
 
-/** Tables that belong to a company and are row-secured (migrations 0002, 0004, 0005). */
+/**
+ * One sale credited to one person. A sale from a dialer usually gives two
+ * rows with the same external_ref: the closer who made it and the fronter
+ * whose transfer led to it. Voided rows stay for the record and earn nothing.
+ * Monthly counts per role feed the sales incentive in payroll.
+ */
+export const sales = pgTable(
+  'sales',
+  {
+    id: serial('id').primaryKey(),
+    companyId: companyId(),
+    sipId: text('sip_id').notNull(),
+    /** 'closer' made the sale, 'fronter' transferred the call that became it */
+    role: text('role').notNull(),
+    saleDate: date('sale_date', { mode: 'string' }).notNull(),
+    /** 'manual', or the system that reported it ('vicidial') */
+    source: text('source').notNull().default('manual'),
+    context: text('context').notNull().default(''),
+    /** the sale's id in the source system; null for manual entries */
+    externalRef: text('external_ref'),
+    /** the account that system credited, e.g. the agent user */
+    externalUser: text('external_user'),
+    /** customer, policy or lead number, as the team knows the sale */
+    reference: text('reference'),
+    /** sale value in PKR, when known; not used for incentives */
+    amount: integer('amount'),
+    note: text('note'),
+    /** 'confirmed' | 'void' */
+    status: text('status').notNull().default('confirmed'),
+    voidReason: text('void_reason'),
+    /** set when a person voided it, so a later sync from the source never restores it */
+    voidedBy: integer('voided_by').references((): AnyPgColumn => users.id),
+    createdBy: integer('created_by').references((): AnyPgColumn => users.id),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({ name: 'sales_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }),
+    // a source's sale is stored once per role; manual rows (null ref) never collide
+    uniqueIndex('sales_external_uq').on(t.companyId, t.source, t.context, t.externalRef, t.role),
+    index('sales_date_idx').on(t.companyId, t.saleDate),
+    index('sales_sip_date_idx').on(t.companyId, t.sipId, t.saleDate),
+  ],
+);
+
+/** Tables that belong to a company and are row-secured (migrations 0002, 0004, 0005, 0006). */
 export const TENANT_TABLES = [
   'roles',
   'users',
@@ -907,4 +952,5 @@ export const TENANT_TABLES = [
   'webhook_deliveries',
   'employee_links',
   'employee_metrics',
+  'sales',
 ] as const;

@@ -4,6 +4,7 @@
  *   POST /api/v1/hrms/webhook/:company   HRMS webhooks (signed; no session)
  *   GET  /api/v1/hrms/agents?users=a,b   HRMS details for agents, for QA screens (signed in)
  *   POST /api/v1/hrms/push-qa-scores     send QA scores now (signed in, admin.agents)
+ *   POST /api/v1/hrms/push-sales         send closed sales now (signed in, admin.agents)
  *
  * Register in app.ts (two lines, see README):
  *   import { hrmsWebhookRoutes, hrmsRoutes } from './integrations/hrms/routes.js';
@@ -17,7 +18,7 @@ import { db } from '../../db/client.js';
 import { companies } from '../../db/schema.js';
 import { companyScope, requirePermission } from '../../auth/plugin.js';
 import { hrmsWebhookSecret, verifyHrmsWebhook, type HrmsEvent } from './client.js';
-import { employeesFor, forgetHrmsCache, pushQaScores } from './sync.js';
+import { employeesFor, forgetHrmsCache, pushQaScores, pushSales } from './sync.js';
 
 /** Webhooks from HRMS. Public route; trusted only after the signature checks out. */
 export async function hrmsWebhookRoutes(app: FastifyInstance): Promise<void> {
@@ -57,5 +58,9 @@ export async function hrmsRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/push-qa-scores', { preHandler: requirePermission('admin.agents') }, async () => {
     return { data: await pushQaScores() };
+  });
+
+  app.post('/push-sales', { preHandler: requirePermission('admin.agents') }, async () => {
+    return { data: await pushSales() };
   });
 }

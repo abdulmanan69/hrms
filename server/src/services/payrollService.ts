@@ -21,7 +21,8 @@ import { ConflictError, NotFoundError, ValidationError } from '../lib/errors.js'
 import { computePayslip, type EngineResult } from './payrollEngine.js';
 import { unpaidDaysByMonth } from './leaveUnpaid.js';
 import { fullName, userIdForSip, userIdsWithPermission } from './people.js';
-import { getSetting, type LeaveSettings, type PayrollSettings } from './settings.js';
+import { getSetting, type IncentiveSettings, type LeaveSettings, type PayrollSettings } from './settings.js';
+import { incentiveAdditions, incentiveOf, salesCounts, type RoleCounts } from './sales.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -39,10 +40,11 @@ export function pkr(n: number): string {
 export interface PayrollContext {
   payroll: PayrollSettings;
   leave: LeaveSettings;
+  incentives: IncentiveSettings;
 }
 
 export async function loadContext(tx: DbOrTx): Promise<PayrollContext> {
-  return { payroll: await getSetting(tx, 'payroll'), leave: await getSetting(tx, 'leave') };
+  return { payroll: await getSetting(tx, 'payroll'), leave: await getSetting(tx, 'leave'), incentives: await getSetting(tx, 'incentives') };
 }
 
 /* ------------------------------------------------------------------ */
@@ -144,6 +146,8 @@ export interface PayslipSnapshot {
   daysOfMonth: number;
   periods: EngineResult['periods'];
   warnings: string[];
+  /** confirmed sales this month and the incentive they earned, when any */
+  sales?: { closer: number; fronter: number; closerIncentive: number; fronterIncentive: number };
 }
 
 type Run = typeof payrollRuns.$inferSelect;
@@ -156,6 +160,8 @@ export async function computeAndSave(
   ctx: PayrollContext,
   /** unpaid leave days this month; looked up with unpaidDaysByMonth when omitted */
   unpaidDays?: number,
+  /** confirmed sales this month by role; looked up when omitted */
+  saleCounts?: RoleCounts,
 ): Promise<{ payslipId: number; result: EngineResult }> {
   const { end } = monthBounds(run.periodMonth);
   const [emp] = await tx
@@ -173,6 +179,7 @@ export async function computeAndSave(
     .orderBy(asc(salaryStructures.effectiveFrom));
   const unpaid = unpaidDays ?? (await unpaidDaysByMonth(tx, run.periodMonth, [sipId])).get(sipId) ?? 0;
   const loan = await loanPosition(tx, sipId);
+  const counts = saleCounts ?? (await salesCounts(tx, run.periodMonth, [sipId])).get(sipId);
 
   const [existing] = await tx.select().from(payslips).where(and(eq(payslips.runId, run.id), eq(payslips.sipId, sipId)));
   const manual = existing
@@ -199,7 +206,9 @@ export async function computeAndSave(
     holidays: ctx.leave.holidays,
     loan,
     manualLines: manual.map((l) => ({ section: l.section as 'B' | 'C', component: l.component, amount: l.amount })),
+    autoAdditions: incentiveAdditions(counts, ctx.incentives),
   });
+  const earned = incentiveOf(counts, ctx.incentives);
 
   const snapshot: PayslipSnapshot = {
     name: fullName(emp.e),
@@ -216,6 +225,16 @@ export async function computeAndSave(
     daysOfMonth: result.daysOfMonth,
     periods: result.periods,
     warnings: result.warnings,
+    ...(counts && (counts.closer || counts.fronter)
+      ? {
+          sales: {
+            closer: counts.closer,
+            fronter: counts.fronter,
+            closerIncentive: ctx.incentives.includeInPayroll ? earned.closer.amount : 0,
+            fronterIncentive: ctx.incentives.includeInPayroll ? earned.fronter.amount : 0,
+          },
+        }
+      : {}),
   };
   const values = {
     currentSalaryDays: result.currentSalaryDays,
@@ -258,8 +277,9 @@ export async function computeRun(
   const { sipIds, skipped } = await eligibleFor(tx, run.periodMonth);
   const negative: Array<{ sipId: string; name: string; net: number }> = [];
   const unpaid = sipIds.length ? await unpaidDaysByMonth(tx, run.periodMonth, sipIds) : new Map<string, number>();
+  const sold = await salesCounts(tx, run.periodMonth, sipIds);
   for (const sipId of sipIds) {
-    const { result } = await computeAndSave(tx, run, sipId, ctx, unpaid.get(sipId) ?? 0);
+    const { result } = await computeAndSave(tx, run, sipId, ctx, unpaid.get(sipId) ?? 0, sold.get(sipId) ?? { closer: 0, fronter: 0 });
     if (result.net < 0) negative.push({ sipId, name: '', net: result.net });
   }
   const stale = await tx
@@ -438,7 +458,7 @@ export async function approveRun(tx: DbOrTx, runId: number, actor: PayrollActor)
   // freezes the figures someone actually reviewed.
   const stale = await draftIsStale(tx, run, slips);
   if (stale) {
-    throw new ConflictError(`Salary, leave or loan records changed since the ${label} run was computed (${stale}). Recompute, review, then approve`);
+    throw new ConflictError(`Salary, leave, loan or sales records changed since the ${label} run was computed (${stale}). Recompute, review, then approve`);
   }
   const loans = await tx
     .select({ amount: payslipLines.amount, sipId: payslips.sipId, snapshot: payslips.snapshot })

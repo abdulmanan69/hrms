@@ -60,6 +60,8 @@ export interface EngineInput {
   /** outstanding loan/advance balance and the monthly installment, if any */
   loan: { balance: number; installment: number } | null;
   manualLines: EngineManualLine[];
+  /** computed additions, e.g. the sales incentive; paid in B before manual lines */
+  autoAdditions?: Array<{ component: string; amount: number }>;
 }
 
 export interface EnginePeriod {
@@ -213,9 +215,11 @@ export function computePayslip(input: EngineInput): EngineResult {
   if (grossA !== 0 || basic !== 0) lines.push({ section: 'A', component: 'Basic', amount: basic, isManual: false, sortOrder: order++ });
   for (const o of others) if (o.amount !== 0) lines.push({ section: 'A', ...o, isManual: false, sortOrder: order++ });
 
-  /* B: manual only ---------------------------------------------------- */
+  /* B: computed additions, then manual ---------------------------------- */
+  const autoB = (input.autoAdditions ?? []).filter((l) => l.amount !== 0);
   const manualB = input.manualLines.filter((l) => l.section === 'B');
-  const totalB = manualB.reduce((n, l) => n + l.amount, 0);
+  const totalB = autoB.reduce((n, l) => n + l.amount, 0) + manualB.reduce((n, l) => n + l.amount, 0);
+  for (const l of autoB) lines.push({ section: 'B', component: l.component, amount: l.amount, isManual: false, sortOrder: order++ });
   for (const l of manualB) lines.push({ section: 'B', component: l.component, amount: l.amount, isManual: true, sortOrder: order++ });
 
   /* C: statutory, loan, manual --------------------------------------- */

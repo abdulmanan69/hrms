@@ -23,6 +23,7 @@ import { leaveRoutes } from './routes/leave.js';
 import { platformRoutes } from './routes/platform.js';
 import { integrationRoutes } from './routes/integrations.js';
 import { connectRoutes } from './routes/connect.js';
+import { salesRoutes } from './routes/sales.js';
 import { realtimeSocketRoute, realtimeTicketRoutes } from './routes/realtime.js';
 import { invalidateApiKeyCache } from './services/apiKeys.js';
 import { runInCompany } from './db/client.js';
@@ -171,6 +172,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(leaveRoutes, { prefix: '/leave' });
       await api.register(integrationRoutes, { prefix: '/integrations' });
       await api.register(connectRoutes, { prefix: '/connect' });
+      await api.register(salesRoutes, { prefix: '/sales' });
       await api.register(realtimeTicketRoutes, { prefix: '/realtime' });
     },
     { prefix: '/api/v1' },

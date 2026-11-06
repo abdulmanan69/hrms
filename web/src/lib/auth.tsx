@@ -42,7 +42,10 @@ export type Permission =
   | 'audit.view'
   | 'settings.manage'
   | 'integrations.manage'
-  | 'metrics.write';
+  | 'metrics.write'
+  | 'sales.view'
+  | 'sales.manage'
+  | 'sales.write';
 
 export interface CompanyOption {
   id: number;

@@ -140,9 +140,18 @@ Many systems (a dialer, a door-access system, a ticket desk) know staff by their
 | `PUT /connect/:system/links` `{ links: [{ sipId, externalId, context? }] }` | employees.manage | Link accounts (bulk, up to 2,000) |
 | `DELETE /connect/:system/links` `{ externalId, context? }` | employees.manage | Unlink |
 | `POST /connect/:system/metrics` `{ items: [{ externalId \| sipId, metric, period, value, unit?, details? }] }` | metrics.write | Report figures per person: `period` is `YYYY-MM` or a date; the same person, metric and period replaces the value. Unknown accounts come back in `unknown` |
+| `POST /connect/:system/sales` `{ context?, window?: { from, to }, items: [{ externalRef, saleDate, closer?, fronter?, closerSipId?, fronterSipId?, reference?, amount? }] }` | sales.write | Report sales (below) |
 | `GET /connect/employees/:sipId` | can read the employee | One person's accounts and latest figures |
 
 `context` tells apart equal user names in several instances of the same system (e.g. two dialers); leave it empty otherwise.
+
+**Sales.** Each sale credits its `closer` and, when given, the `fronter` whose transfer led to it. HRMS pays a monthly incentive from these counts, at the slab rates HR sets under **Sales → Incentive slabs**, as section B lines on the payslip.
+
+- **Sending again is safe.** A sale is stored once per `externalRef` and role, and resending updates it.
+- **`window` keeps HRMS in step.** HRMS voids this system's sales dated in `window` (at most 62 days) that are missing from `items`. Send every sale in the window, split into requests of whole days, at most 2,000 sales each.
+- **People's decisions stay.** A sale someone voided in HRMS is never restored by a sync.
+- **Paid months are final.** Months whose payroll is approved or paid never change; they are counted in `locked`.
+- **The answer** is `{ received, inserted, updated, unchanged, voided, locked, unknown }`. `unknown` lists accounts not linked to anyone yet.
 
 The VICIdial QA platform has a ready-made kit using all of this: [integrations/vicidial](../integrations/vicidial/README.md).
 
@@ -155,6 +164,7 @@ The VICIdial QA platform has a ready-made kit using all of this: [integrations/v
 | `candidate.created` / `updated`, `application.stage_changed` / `rejected`, `interview.created` / `updated` | Recruitment |
 | `leave_application.created` / `approved` / `rejected` / `cancelled`, `leave_ledger.adjusted` | Leave |
 | `payroll_run.created` / `approved` / `paid` / `reopened`, `salary_structure.created`, `loan.created` | Payroll |
+| `sale.created` / `voided` / `restored` / `received`, `incentive_plan.updated` | Sales |
 | `department.*`, `designation.*`, `user.*`, `role.*`, `webhook.*`, `api_key.*` | Setup and admin |
 
 Patterns: `*` (everything), `employee.*` (one module), or an exact type.

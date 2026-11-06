@@ -57,6 +57,29 @@ export interface MetricItem {
   details?: Record<string, unknown>;
 }
 
+export interface SaleItem {
+  /** the sale's id in the QA platform (transfer id); sending it again updates the sale */
+  externalRef: string;
+  /** 'YYYY-MM-DD', the day the sale counts for */
+  saleDate: string;
+  /** agent user who closed the sale */
+  closer?: string;
+  /** agent user whose transfer became the sale */
+  fronter?: string;
+  /** lead or customer number, shown in HRMS */
+  reference?: string | null;
+}
+
+export interface SalesResult {
+  received: number;
+  inserted: number;
+  updated: number;
+  unchanged: number;
+  voided: number;
+  locked: number;
+  unknown: string[];
+}
+
 export class HrmsError extends Error {
   constructor(
     public status: number,
@@ -134,6 +157,15 @@ export class HrmsClient {
       unknown.push(...r.unknown);
     }
     return { saved, unknown };
+  }
+
+  /**
+   * Report sales (needs sales.write). HRMS credits the closer and the fronter.
+   * With a window, HRMS voids its sales from this dialer context in that date
+   * range that are not in `items`, so undone sales stop counting.
+   */
+  pushSales(items: SaleItem[], window?: { from: string; to: string }, context = '') {
+    return this.call<SalesResult>('POST', `/connect/${SYSTEM}/sales`, { context, window, items });
   }
 
   /** Changes since a cursor, for polling instead of a webhook. */

@@ -36,6 +36,8 @@ const PAST: Record<string, string> = {
   disable: 'disabled',
   revoke: 'revoked',
   received: 'received',
+  void: 'voided',
+  restore: 'restored',
 };
 
 /** Audit actions that are not business events. */
@@ -65,6 +67,8 @@ export const ENTITY_MODULE: Record<string, string> = {
   api_key: 'integrations.manage',
   employee_link: 'employees.view',
   employee_metric: 'employees.view',
+  sale: 'sales.view',
+  incentive_plan: 'sales.view',
   webhook: 'integrations.manage',
 };
 

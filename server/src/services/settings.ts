@@ -28,6 +28,30 @@ export interface LeaveSettings {
   holidays: string[];
 }
 
+/** One slab: from this many sales in the month, PKR `rate` per sale. */
+export interface IncentiveSlab {
+  from: number;
+  rate: number;
+}
+
+/**
+ * How one role earns its monthly sales incentive. Sales below the first
+ * slab's `from` earn nothing (the target).
+ *   reached: every sale is paid at the rate of the highest slab reached
+ *   stepped: each sale is paid at the rate of the slab it falls in
+ */
+export interface IncentivePlan {
+  mode: 'reached' | 'stepped';
+  slabs: IncentiveSlab[];
+}
+
+export interface IncentiveSettings {
+  closer: IncentivePlan;
+  fronter: IncentivePlan;
+  /** add the incentive to payslips (section B) automatically */
+  includeInPayroll: boolean;
+}
+
 export interface CompanySettings {
   name: string;
   currency: string;
@@ -48,6 +72,12 @@ export const DEFAULT_SETTINGS = {
     prorationBasis: 'calendar',
   } satisfies PayrollSettings as PayrollSettings,
   leave: { weekendDays: [0, 6], holidays: [] } satisfies LeaveSettings as LeaveSettings,
+  // no slabs = no incentive until HR sets the rates
+  incentives: {
+    closer: { mode: 'reached', slabs: [] },
+    fronter: { mode: 'reached', slabs: [] },
+    includeInPayroll: true,
+  } satisfies IncentiveSettings as IncentiveSettings,
   company: { name: 'WaveTech', currency: 'PKR' } satisfies CompanySettings as CompanySettings,
 };
 

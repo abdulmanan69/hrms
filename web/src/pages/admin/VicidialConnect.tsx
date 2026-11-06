@@ -14,7 +14,7 @@ type Person = { sipId: string; name: string; status: string; department: string 
 type Suggestion = { sipId: string; name: string; department: string | null; score: number; alreadyLinked: boolean };
 type Row = { externalId: string; context: string; fullName: string; linkedTo: string | null; suggestions: Suggestion[] };
 
-const SCOPES = ['employees.view', 'leave.view', 'metrics.write'];
+const SCOPES = ['employees.view', 'leave.view', 'metrics.write', 'sales.write'];
 const EVENTS = ['employee.created', 'employee.updated', 'employee.activated', 'employee.deactivated', 'employee.reactivated', 'leave_application.approved', 'leave_application.cancelled'];
 
 function CopyBlock({ text }: { text: string }) {
@@ -79,7 +79,7 @@ function KeyStep() {
         <div>
           <p className="card-title">1. Give VICIdial a key</p>
           <p className="text-xs text-ink-3">
-            Reads people and leave, and reports QA scores back: <span className="num">{SCOPES.join(', ')}</span>
+            Reads people and leave, and reports QA scores and sales back: <span className="num">{SCOPES.join(', ')}</span>
           </p>
         </div>
         {!made && (

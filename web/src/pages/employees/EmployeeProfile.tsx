@@ -23,10 +23,11 @@ import { empKeys, employeesApi, type DocumentType, type EmployeeDetail } from '.
 import { EmployeeSalaryPanel } from '../payroll/EmployeeSalaryPanel';
 import { EmployeeLeavePanel } from '../leave/EmployeeLeavePanel';
 import { ConnectedAccounts } from './ConnectedAccounts';
+import { SalesPanel } from '../sales/SalesPanel';
 import { DocumentList, HistoryTimeline, QuickUploadButton, ReasonModal, UploadDocumentModal, useInvalidateEmployees } from './parts';
 import { statusText } from './Employees';
 
-type Tab = 'details' | 'documents' | 'salary' | 'leave' | 'history';
+type Tab = 'details' | 'documents' | 'salary' | 'leave' | 'sales' | 'history';
 
 /** Blocker text from the server mapped to the document that fixes it. */
 const BLOCKER_DOC: Record<string, DocumentType> = { 'CNIC copy': 'cnic', 'signed contract': 'contract' };
@@ -46,6 +47,7 @@ function Profile({ emp }: { emp: EmployeeDetail }) {
   const docsManage = can('documents.manage', 'employees.manage');
   const own = user?.sipId === emp.sipId;
   const showSalary = can('payroll.view') || own;
+  const showSales = can('sales.view') || can('team.view') || own;
   const [tab, setTab] = useState<Tab>('details');
   const [deactivating, setDeactivating] = useState(false);
   const [reactivating, setReactivating] = useState(false);
@@ -82,6 +84,7 @@ function Profile({ emp }: { emp: EmployeeDetail }) {
     { value: 'documents', label: 'Documents', count: emp.documents.length },
     ...(showSalary ? [{ value: 'salary' as Tab, label: 'Salary' }] : []),
     { value: 'leave', label: 'Leave' },
+    ...(showSales ? [{ value: 'sales' as Tab, label: 'Sales' }] : []),
     { value: 'history', label: 'History' },
   ];
 
@@ -215,6 +218,12 @@ function Profile({ emp }: { emp: EmployeeDetail }) {
       {tab === 'leave' && (
         <Card className="p-5">
           <EmployeeLeavePanel sipId={emp.sipId} />
+        </Card>
+      )}
+
+      {tab === 'sales' && showSales && (
+        <Card className="p-5">
+          <SalesPanel sipId={emp.sipId} />
         </Card>
       )}
 

@@ -39,6 +39,10 @@ import { LeaveApply } from './pages/leave/LeaveApply';
 import { LeaveBalances } from './pages/leave/LeaveBalances';
 import { LeaveTypes } from './pages/leave/LeaveTypes';
 import { MyLeave } from './pages/leave/MyLeave';
+// Sales
+import { Sales } from './pages/sales/Sales';
+import { IncentiveSlabs } from './pages/sales/IncentiveSlabs';
+import { MySales } from './pages/sales/MySales';
 
 /** Shows the page only to users holding one of `perms`; `self` = needs a linked employee record. */
 function Guard({ perms, self, children }: { perms?: Permission[]; self?: boolean; children: ReactNode }) {
@@ -86,6 +90,7 @@ export function App() {
         <Route path="/me/profile" element={S(<MyProfile />)} />
         <Route path="/me/leave" element={S(<MyLeave />)} />
         <Route path="/me/payslips" element={S(<MyPayslips />)} />
+        <Route path="/me/sales" element={S(<MySales />)} />
 
         <Route path="/recruitment/pipeline" element={P(recruit, <Pipeline />)} />
         <Route path="/recruitment/candidates" element={P(recruit, <Candidates />)} />
@@ -111,6 +116,9 @@ export function App() {
         <Route path="/leave/apply" element={<LeaveApply />} />
         <Route path="/leave/balances" element={P(['leave.view', 'leave.manage', 'leave.approve.team'], <LeaveBalances />)} />
         <Route path="/leave/types" element={P(['leave.manage'], <LeaveTypes />)} />
+
+        <Route path="/sales" element={P(['sales.view', 'sales.manage', 'team.view'], <Sales />)} />
+        <Route path="/sales/incentives" element={P(['sales.manage'], <IncentiveSlabs />)} />
 
         <Route path="/admin/users" element={P(['users.manage'], <Users />)} />
         <Route path="/admin/audit" element={P(['audit.view'], <AuditTrail />)} />

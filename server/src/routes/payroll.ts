@@ -25,6 +25,7 @@ import { offsetOf, pageMeta, paginationSchema } from '../lib/pagination.js';
 import { employeeNameSql, fullName } from '../services/people.js';
 import { getSetting, setSetting, type PayrollSettings } from '../services/settings.js';
 import { A_COMPONENTS, AUTO_C_COMPONENTS } from '../services/payrollEngine.js';
+import { ROLE_COMPONENT } from '../services/incentives.js';
 import { renderPayslipsPdf } from '../services/payslipPdf.js';
 import type { FastifyReply } from 'fastify';
 
@@ -270,7 +271,7 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
       .where(eq(payslips.runId, id))
       .groupBy(payslipLines.section, payslipLines.component);
     const order = (s: string, c: string) => {
-      const list: readonly string[] = s === 'A' ? A_COMPONENTS : s === 'C' ? AUTO_C_COMPONENTS : [];
+      const list: readonly string[] = s === 'A' ? A_COMPONENTS : s === 'C' ? AUTO_C_COMPONENTS : Object.values(ROLE_COMPONENT);
       const i = list.indexOf(c);
       return i === -1 ? 100 : i;
     };
@@ -508,9 +509,11 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
   }
 
   function checkComponent(section: 'B' | 'C', component: string) {
-    const reserved: readonly string[] = section === 'C' ? AUTO_C_COMPONENTS : [];
+    const reserved: readonly string[] = section === 'C' ? AUTO_C_COMPONENTS : Object.values(ROLE_COMPONENT);
     if (reserved.some((r) => r.toLowerCase() === component.toLowerCase())) {
-      throw new ValidationError(`${component} is computed by the engine; add an Other deduction instead`);
+      throw new ValidationError(
+        section === 'C' ? `${component} is computed by the engine; add an Other deduction instead` : `${component} comes from recorded sales; record or void sales instead`,
+      );
     }
   }
 

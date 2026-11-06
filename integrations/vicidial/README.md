@@ -10,14 +10,15 @@ This kit adds the HRMS link to the QA platform in about ten minutes. It only add
 | --- | --- |
 | Agent `agent1043` | the real person: name, SIP ID, department, designation, team lead, active or left, on leave today or soon |
 | QA scores | sent back to HRMS each month and shown on the employee's profile ("QA score 85%, VICIdial, November 2026") |
+| Closed sales | sent to HRMS every hour, credited to the closer and the fronter; HRMS pays the monthly sales incentive in payroll |
 | Changes in HRMS | a signed webhook as soon as someone joins, changes, leaves or goes on leave, naming the agent user directly |
 
-The QA platform and HRMS keep their own databases. They only meet through the HRMS API, with a key that can read people and leave and write QA figures, nothing else.
+The QA platform and HRMS keep their own databases. They only meet through the HRMS API, with a key that can read people and leave and write QA figures and sales, nothing else.
 
 ## 1. In HRMS (an HR admin, five minutes)
 
 1. Open **Admin → Integrations → VICIdial**.
-2. **Create the VICIdial key.** It gets exactly `employees.view`, `leave.view` and `metrics.write`. Copy the two lines shown (`HRMS_URL`, `HRMS_API_KEY`). The key is shown once.
+2. **Create the VICIdial key.** It gets exactly `employees.view`, `leave.view`, `metrics.write` and `sales.write`. Copy the two lines shown (`HRMS_URL`, `HRMS_API_KEY`). The key is shown once.
 3. **Match agents to employees.** Paste the agent list (`user, full name` per line; copy it from QA → Admin → Agents). Strong name matches are picked for you. Check them and click **Link**. People can also be linked one at a time on an employee's profile (*Connected accounts*).
 4. Optional: **Add webhook** with the QA platform's URL `https://<qa host>/api/v1/hrms/webhook/<qa company slug>`. Copy the `HRMS_WEBHOOK_SECRET` line shown.
 
@@ -31,7 +32,7 @@ Copy `server/src/integrations/hrms/` from this folder into the QA platform's `se
 
 ```
 client.ts   HRMS API client (no new dependencies), webhook signature check, per-company keys
-sync.ts     pushQaScores(), employeesFor(), unavailableAgents()
+sync.ts     pushQaScores(), pushSales(), employeesFor(), unavailableAgents()
 routes.ts   webhook receiver + /api/v1/hrms/agents lookup + manual "push now"
 ```
 
@@ -44,6 +45,7 @@ HRMS_API_KEY=hrms_xxxxxxxx_…            # one HRMS company for every QA compan
 # HRMS_API_KEYS=acme=hrms_…,beta=hrms_…
 HRMS_WEBHOOK_SECRET=whsec_…              # or HRMS_WEBHOOK_SECRETS=acme=whsec_…,beta=whsec_…
 # HRMS_CONTEXT=dialer                    # only if HRMS links use dialer names
+# HRMS_TZ=Asia/Karachi                   # the day a sale counts on (HR's calendar)
 ```
 
 The kit reads these directly, so `config.ts` doesn't change. In Docker they reach the `api` and `worker` containers through the existing `env_file: .env`.
@@ -60,19 +62,30 @@ await app.register(hrmsWebhookRoutes, { prefix: '/api/v1/hrms' });
 await api.register(hrmsRoutes, { prefix: '/hrms' });
 ```
 
-### Send QA scores every hour, from `server/src/worker.ts`
+### Send QA scores and sales every hour, from `server/src/worker.ts`
 
 ```ts
-import { pushQaScores } from './integrations/hrms/sync.js';
+import { pushQaScores, pushSales } from './integrations/hrms/sync.js';
 
 // with the other schedulers:
 await maintenanceQueue.upsertJobScheduler('hrms-qa-scores', { every: 3600 * 1000 }, { name: 'hrms-qa-scores', opts: keep });
+await maintenanceQueue.upsertJobScheduler('hrms-sales', { every: 3600 * 1000 }, { name: 'hrms-sales', opts: keep });
 
 // in the maintenance worker's job switch:
 if (job.name === 'hrms-qa-scores') return pushQaScores();
+if (job.name === 'hrms-sales') return pushSales();
 ```
 
-Each run sends the current and previous month's average per agent, from completed evaluations only. Sending again just updates the same month, so the hourly run is safe. Agents that aren't linked yet are returned in `unknown` and skipped.
+**QA scores.** Each run sends the current and previous month's average per agent, from completed evaluations only. Sending again just updates the same month, so the hourly run is safe.
+
+**Sales.** Each run sends every closed sale from the first day of last month to today. Each sale is credited to:
+
+- **the closer:** the agent on the sale call
+- **the fronter:** the agent who dispositioned the XFER
+
+The run covers the whole period, so a sale that is no longer closed in QA is voided in HRMS. Once HRMS approves a month's payroll, it keeps that month as paid.
+
+**Agents not linked yet** are returned in `unknown` and skipped. They are picked up by the first run after they are linked.
 
 ## 3. Use it
 
@@ -92,12 +105,13 @@ const { left, onLeave } = await unavailableAgents(companyId);   // vici_agents i
 
 **On a webhook** (`routes.ts`), the signature is checked and cached HRMS details are dropped, so screens show the change at once. `event.data.links.vicidial` lists the agent users concerned. Heavier reactions, like moving an agent's open QA tasks when they leave, belong in a queued job started from there.
 
-**Push now:** `POST /api/v1/hrms/push-qa-scores` (permission `admin.agents`) sends QA scores right away.
+**Push now:** `POST /api/v1/hrms/push-qa-scores` and `POST /api/v1/hrms/push-sales` (permission `admin.agents`) send right away.
 
 ## Checked
 
 - **Typechecks** against the QA platform's own code and packages, including the `app.ts` lines above.
 - **`pushQaScores()`** was run against a real QA database built with the platform's own migrations: 2 completed evaluations (90 %, 80 %) and 1 draft became `qa_score 85 %` from 2 evaluations in HRMS.
+- **`pushSales()`** was run against the same database: two closed transfers and one closer callback sale credited `agent1043` with 3 sales and the fronter `agent2001` with 2. An open transfer and a mock sale were left out, and a second run changed nothing.
 - **`employeesFor()`**, the name matching, linking, the signed webhook (verified with `verifyHrmsWebhook`) and the polling feed were run against a live HRMS.
 
 ## Reference

@@ -36,6 +36,12 @@ export const PERMISSIONS = [
   'integrations.manage',
   /** other systems (e.g. VICIdial) report figures per employee: QA scores, hours */
   'metrics.write',
+  /** every sale and incentive; team.view holders see their reports' */
+  'sales.view',
+  /** record and void sales by hand, set the incentive slabs */
+  'sales.manage',
+  /** other systems (e.g. VICIdial) report sales */
+  'sales.write',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -62,7 +68,13 @@ export const ROLE_PRESETS: Record<string, { label: string; description: string; 
       'payroll.manage',
       'payroll.approve',
       'leave.view',
+      'sales.view',
     ],
+  },
+  sales: {
+    label: 'Sales operations',
+    description: 'Records sales and sets incentive slabs; reads the staff register',
+    permissions: ['dashboard.view', 'employees.view', 'sales.view', 'sales.manage'],
   },
   manager: {
     label: 'Manager',

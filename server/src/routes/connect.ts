@@ -8,22 +8,24 @@
  *   PUT    /connect/:system/links                     link accounts to employees (bulk)
  *   DELETE /connect/:system/links                     unlink one account
  *   POST   /connect/:system/metrics                   report figures per account
+ *   POST   /connect/:system/sales                     report sales (closer and fronter credit)
  *   GET    /connect/employees/:sipId                  one person's accounts and figures
  *
  * All of it is company-scoped like every other route; an API key sees only
  * its own company's people.
  */
 import type { FastifyInstance } from 'fastify';
-import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { db } from '../db/client.js';
-import { departments, designations, employeeLinks, employeeMetrics, employees, leaveApplications, leaveTypes } from '../db/schema.js';
+import { departments, designations, employeeLinks, employeeMetrics, employees, leaveApplications, leaveTypes, sales } from '../db/schema.js';
 import { assertCanReadEmployee, can, requirePermission } from '../auth/plugin.js';
 import { writeAudit } from '../lib/audit.js';
 import { addDays, todayISO } from '../lib/dates.js';
 import { ValidationError } from '../lib/errors.js';
 import { employeeNameSql } from '../services/people.js';
+import { closedMonths } from '../services/sales.js';
 
 const systemParam = z.object({ system: z.string().regex(/^[a-z][a-z0-9_-]{1,31}$/, 'System names are lowercase, e.g. vicidial') });
 const externalId = z.string().trim().min(1).max(100);
@@ -345,6 +347,200 @@ export async function connectRoutes(app: FastifyInstance): Promise<void> {
       });
     }
     return { system, saved, unknown: [...new Set(unknown)] };
+  });
+
+  /**
+   * Sales from a system, each credited to its closer and (optionally) the
+   * fronter whose transfer led to it. Idempotent per (externalRef, role):
+   * sending a sale again updates it. With `window`, this system's sales in
+   * that date range that are not in `items` are voided (the sale was undone
+   * in the source). A sale a person voided by hand stays voided. Months with
+   * approved or paid payroll are never changed.
+   */
+  app.post('/:system/sales', { preHandler: requirePermission('sales.write') }, async (req) => {
+    const { system } = systemParam.parse(req.params);
+    const isoDate = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, 'Dates are YYYY-MM-DD');
+    const body = z
+      .object({
+        context: contextStr,
+        window: z.object({ from: isoDate, to: isoDate }).optional(),
+        items: z
+          .array(
+            z
+              .object({
+                externalRef: z.string().trim().min(1).max(100),
+                saleDate: isoDate,
+                closer: externalId.optional(),
+                fronter: externalId.optional(),
+                closerSipId: z.string().trim().min(1).optional(),
+                fronterSipId: z.string().trim().min(1).optional(),
+                reference: z.string().trim().max(120).optional().nullable(),
+                amount: z.number().int().min(0).max(1_000_000_000).optional().nullable(),
+              })
+              .refine((i) => i.closer || i.closerSipId || i.fronter || i.fronterSipId, 'Each sale needs a closer or a fronter'),
+          )
+          .max(2000),
+      })
+      .parse(req.body);
+    const w = body.window;
+    if (w) {
+      if (w.from > w.to) throw new ValidationError('window.from is after window.to');
+      if ((Date.parse(w.to) - Date.parse(w.from)) / 86_400_000 > 62) throw new ValidationError('A window covers at most 62 days');
+      const outside = body.items.find((i) => i.saleDate < w.from || i.saleDate > w.to);
+      if (outside) throw new ValidationError(`Sale ${outside.externalRef} (${outside.saleDate}) is outside the window`);
+    }
+    const ctx = body.context;
+    const closed = await closedMonths(db);
+    const isClosed = (d: string) => closed.has(d.slice(0, 7));
+
+    // accounts → people
+    const accounts = [...new Set(body.items.flatMap((i) => [i.closer, i.fronter]).filter((x): x is string => !!x))];
+    const links = accounts.length
+      ? await db
+          .select({ externalId: employeeLinks.externalId, sipId: employeeLinks.sipId })
+          .from(employeeLinks)
+          .where(and(eq(employeeLinks.system, system), eq(employeeLinks.context, ctx), inArray(employeeLinks.externalId, accounts)))
+      : [];
+    const sipOfAccount = new Map(links.map((l) => [l.externalId, l.sipId]));
+    const sipsGiven = [...new Set(body.items.flatMap((i) => [i.closerSipId, i.fronterSipId]).filter((x): x is string => !!x))];
+    const knownSips = new Set(
+      sipsGiven.length ? (await db.select({ sipId: employees.sipId }).from(employees).where(inArray(employees.sipId, sipsGiven))).map((e) => e.sipId) : [],
+    );
+
+    type Want = { key: string; externalRef: string; role: 'closer' | 'fronter'; sipId: string; saleDate: string; externalUser: string | null; reference: string | null; amount: number | null };
+    const wanted = new Map<string, Want>();
+    const unknown = new Set<string>();
+    let locked = 0;
+    for (const i of body.items) {
+      for (const r of ['closer', 'fronter'] as const) {
+        const account = i[r];
+        const given = r === 'closer' ? i.closerSipId : i.fronterSipId;
+        if (!account && !given) continue;
+        const sipId = given ? (knownSips.has(given) ? given : null) : sipOfAccount.get(account!) ?? null;
+        if (!sipId) {
+          unknown.add(account ?? given!);
+          continue;
+        }
+        if (isClosed(i.saleDate)) {
+          locked++;
+          continue;
+        }
+        const key = `${i.externalRef}\u0000${r}`;
+        wanted.set(key, {
+          key,
+          externalRef: i.externalRef,
+          role: r,
+          sipId,
+          saleDate: i.saleDate,
+          externalUser: account ?? null,
+          reference: i.reference ?? null,
+          amount: r === 'closer' ? (i.amount ?? null) : null,
+        });
+      }
+    }
+
+    // what is stored already: these refs, plus everything in the window
+    const refs = [...new Set(body.items.map((i) => i.externalRef))];
+    const existing = await db
+      .select()
+      .from(sales)
+      .where(
+        and(
+          eq(sales.source, system),
+          eq(sales.context, ctx),
+          w
+            ? or(refs.length ? inArray(sales.externalRef, refs) : undefined, and(gte(sales.saleDate, w.from), lte(sales.saleDate, w.to)))
+            : inArray(sales.externalRef, refs.length ? refs : ['\u0000']),
+        ),
+      );
+    const stored = new Map(existing.map((e) => [`${e.externalRef}\u0000${e.role}`, e]));
+
+    const inserts: Want[] = [];
+    let updated = 0;
+    let unchanged = 0;
+    for (const want of wanted.values()) {
+      const cur = stored.get(want.key);
+      if (!cur) {
+        inserts.push(want);
+        continue;
+      }
+      if (isClosed(cur.saleDate)) {
+        locked++;
+        continue;
+      }
+      const revive = cur.status === 'void' && cur.voidedBy === null;
+      const same =
+        cur.sipId === want.sipId &&
+        cur.saleDate === want.saleDate &&
+        cur.externalUser === want.externalUser &&
+        cur.reference === want.reference &&
+        cur.amount === want.amount;
+      if (same && !revive) {
+        unchanged++;
+        continue;
+      }
+      await db
+        .update(sales)
+        .set({
+          sipId: want.sipId,
+          saleDate: want.saleDate,
+          externalUser: want.externalUser,
+          reference: want.reference,
+          amount: want.amount,
+          ...(revive ? { status: 'confirmed', voidReason: null } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(sales.id, cur.id));
+      updated++;
+    }
+    for (let i = 0; i < inserts.length; i += 500) {
+      await db.insert(sales).values(
+        inserts.slice(i, i + 500).map((x) => ({
+          sipId: x.sipId,
+          role: x.role,
+          saleDate: x.saleDate,
+          source: system,
+          context: ctx,
+          externalRef: x.externalRef,
+          externalUser: x.externalUser,
+          reference: x.reference,
+          amount: x.amount,
+        })),
+      );
+    }
+
+    // undone in the source: confirmed rows in the window that were not sent
+    let voided = 0;
+    if (w) {
+      const sentKeys = new Set(body.items.flatMap((i) => [`${i.externalRef}\u0000closer`, `${i.externalRef}\u0000fronter`]));
+      const gone = existing.filter(
+        (e) =>
+          e.status === 'confirmed' &&
+          e.saleDate >= w.from &&
+          e.saleDate <= w.to &&
+          !isClosed(e.saleDate) &&
+          !(sentKeys.has(`${e.externalRef}\u0000${e.role}`) && wanted.has(`${e.externalRef}\u0000${e.role}`)),
+      );
+      if (gone.length) {
+        await db
+          .update(sales)
+          .set({ status: 'void', voidReason: `No longer a sale in ${label(system)}`, updatedAt: new Date() })
+          .where(inArray(sales.id, gone.map((g) => g.id)));
+        voided = gone.length;
+      }
+    }
+
+    if (inserts.length || updated || voided) {
+      const parts = [inserts.length && `${inserts.length} new`, updated && `${updated} updated`, voided && `${voided} voided`].filter(Boolean).join(', ');
+      await writeAudit(db, req, {
+        action: 'received',
+        entity: 'sale',
+        entityId: system,
+        summary: `received sales from ${label(system)}: ${parts}`,
+        after: { system, context: ctx, window: w ?? null, inserted: inserts.length, updated, voided },
+      });
+    }
+    return { system, received: body.items.length, inserted: inserts.length, updated, unchanged, voided, locked, unknown: [...unknown] };
   });
 
   /** One person's accounts in other systems and their latest figures (for the profile). */

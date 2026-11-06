@@ -43,6 +43,13 @@
       "when": 1793933048384,
       "tag": "0005_employee-links",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793964730448,
+      "tag": "0006_sales",
+      "breakpoints": true
     }
   ]
 }

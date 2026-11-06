@@ -3,6 +3,8 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Banknote,
+  BadgeDollarSign,
+  TrendingUp,
   Bell,
   Building,
   Check,
@@ -52,6 +54,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
       { to: '/me/profile', label: 'My profile', icon: <UserRound {...ICON} />, self: true },
       { to: '/me/leave', label: 'My leave', icon: <CalendarPlus {...ICON} />, self: true },
       { to: '/me/payslips', label: 'My payslips', icon: <ReceiptText {...ICON} />, self: true },
+      { to: '/me/sales', label: 'My sales', icon: <BadgeDollarSign {...ICON} />, self: true },
     ],
   },
   {
@@ -78,6 +81,10 @@ const NAV: { group: string; items: NavItem[] }[] = [
       { to: '/payroll/loans', label: 'Loans and advances', icon: <HandCoins {...ICON} />, perms: ['payroll.view'] },
       { to: '/payroll/settings', label: 'Payroll rules', icon: <Settings2 {...ICON} />, perms: ['payroll.manage', 'settings.manage'] },
     ],
+  },
+  {
+    group: 'Sales',
+    items: [{ to: '/sales', label: 'Sales and incentives', icon: <TrendingUp {...ICON} />, perms: ['sales.view', 'sales.manage', 'team.view'] }],
   },
   {
     group: 'Leave',
