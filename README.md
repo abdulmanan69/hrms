@@ -51,7 +51,7 @@ web (nginx :3000) ──/api──▶ api (Fastify :8080) ──▶ postgres (:5
 2. **Pick the build.** Build Pack *Docker Compose*, location `/docker-compose.coolify.yml`.
 3. **Set the domain** on the `web` service, for example `https://hr.example.com`. The domain's DNS must point at the server first, so the HTTPS certificate can be issued.
 4. **Set the admin password.** In Environment Variables, set `ADMIN_PASSWORD`, plus `ADMIN_EMAIL`, `COMPANY_NAME` and `COMPANY_SLUG` if they differ from the defaults. Coolify generates the database password.
-5. **Deploy.** Pushes to `main` redeploy automatically.
+5. **Deploy.** After each push to `main`, press *Redeploy* in Coolify. To redeploy on every push instead, add the webhook from the resource's *Webhooks* page to the GitHub repository.
 
 ### Backups
 
