@@ -43,12 +43,12 @@ import {
 /* ------------------------------------------------------------------ */
 
 const isoDate = z.string().refine(isISODate, 'Use a YYYY-MM-DD date');
-const sipParam = z.object({ sipId: z.string().trim().min(1).max(20) });
+const sipParam = z.object({ sipId: z.string().trim().min(1).max(30) });
 const idParam = z.object({ id: z.coerce.number().int().positive() });
 const boolish = z.preprocess((v) => (v === 'true' || v === '1' || v === 'on' ? true : v === 'false' || v === '0' || v === '' ? false : v), z.boolean());
 
 const applyBody = z.object({
-  sipId: z.string().trim().min(1).max(20).optional(),
+  sipId: z.string().trim().min(1).max(30).optional(),
   leaveTypeId: z.coerce.number().int().positive(),
   startDate: isoDate,
   endDate: isoDate,
@@ -57,7 +57,7 @@ const applyBody = z.object({
 });
 
 const quoteQuery = z.object({
-  sipId: z.string().trim().min(1).max(20).optional(),
+  sipId: z.string().trim().min(1).max(30).optional(),
   leaveTypeId: z.coerce.number().int().positive(),
   startDate: isoDate,
   endDate: isoDate,
@@ -68,7 +68,7 @@ const listQuery = paginationSchema.extend({
   scope: z.enum(['all', 'mine-to-approve']).default('all'),
   status: z.enum([...LEAVE_STATUSES, 'all']).default('all'),
   leaveTypeId: z.coerce.number().int().positive().optional(),
-  sipId: z.string().trim().max(20).optional(),
+  sipId: z.string().trim().max(30).optional(),
   departmentId: z.coerce.number().int().positive().optional(),
   from: isoDate.optional(),
   to: isoDate.optional(),
@@ -510,7 +510,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
   app.post('/adjustments', manage, async (req, reply) => {
     const body = z
       .object({
-        sipId: z.string().trim().min(1).max(20),
+        sipId: z.string().trim().min(1).max(30),
         leaveTypeId: z.number().int().positive(),
         days: z.number().refine((n) => n !== 0 && Math.abs(n) <= 365, 'Enter a non-zero number of days up to 365'),
         note: z.string().trim().min(3, 'Say why the balance changes').max(500),

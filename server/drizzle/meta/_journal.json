@@ -57,6 +57,13 @@
       "when": 1793967165444,
       "tag": "0007_ops-log",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793970263476,
+      "tag": "0008_sip-id-cascade",
+      "breakpoints": true
     }
   ]
 }

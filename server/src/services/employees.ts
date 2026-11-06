@@ -4,6 +4,7 @@
  * a candidate. Both go through createEmployee so the SIP ID, the leave grant
  * and the audit row are always written the same way.
  */
+import { ConflictError } from '../lib/errors.js';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db/client.js';
 import {
@@ -30,6 +31,8 @@ export async function nextSipId(tx: DbOrTx, year: number): Promise<string> {
 }
 
 export interface NewEmployee {
+  /** a SIP ID given by hand (e.g. the VICIdial user); generated when absent */
+  sipId?: string | null;
   firstName: string;
   middleInitial?: string | null;
   lastName: string;
@@ -66,7 +69,14 @@ export async function createEmployee(
   actor: { userId: number | null; ip?: string | null },
 ): Promise<typeof employees.$inferSelect> {
   const year = Number(input.dateOfJoining.slice(0, 4)) || Number(todayISO().slice(0, 4));
-  const sipId = await nextSipId(tx, year);
+  let sipId: string;
+  if (input.sipId) {
+    const [taken] = await tx.select({ sipId: employees.sipId }).from(employees).where(sql`lower(${employees.sipId}) = lower(${input.sipId})`);
+    if (taken) throw new ConflictError(`SIP ID ${taken.sipId} is already in use`);
+    sipId = input.sipId;
+  } else {
+    sipId = await nextSipId(tx, year);
+  }
   const [emp] = await tx
     .insert(employees)
     .values({

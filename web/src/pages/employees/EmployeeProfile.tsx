@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, Check, Pencil, Upload } from 'lucide-react';
 import {
@@ -9,9 +9,11 @@ import {
   ConfirmModal,
   DetailList,
   ErrorState,
+  Field,
   FormError,
   ICON,
   Loading,
+  Modal,
   SipId,
   StatusTag,
   Tabs,
@@ -50,6 +52,7 @@ function Profile({ emp }: { emp: EmployeeDetail }) {
   const showSales = can('sales.view') || can('team.view') || own;
   const [tab, setTab] = useState<Tab>('details');
   const [deactivating, setDeactivating] = useState(false);
+  const [changingSip, setChangingSip] = useState(false);
   const [reactivating, setReactivating] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -114,6 +117,9 @@ function Profile({ emp }: { emp: EmployeeDetail }) {
                 <Pencil {...ICON} className="text-ink-3" />
                 Edit
               </Link>
+              <button className="btn-ghost" onClick={() => setChangingSip(true)}>
+                Change SIP ID
+              </button>
               {emp.status === 'pending' && (
                 <button
                   className="btn-primary"
@@ -228,6 +234,8 @@ function Profile({ emp }: { emp: EmployeeDetail }) {
       )}
 
       {tab === 'history' && <HistoryTimeline sipId={emp.sipId} />}
+
+      {changingSip && <ChangeSipIdModal emp={emp} onClose={() => setChangingSip(false)} />}
 
       <UploadDocumentModal
         open={uploading}
@@ -408,5 +416,49 @@ function Details({ emp }: { emp: EmployeeDetail }) {
         <ConnectedAccounts sipId={emp.sipId} />
       </div>
     </div>
+  );
+}
+
+/** A different SIP ID, e.g. the person's VICIdial user. Everything that points at them follows. */
+function ChangeSipIdModal({ emp, onClose }: { emp: EmployeeDetail; onClose: () => void }) {
+  const invalidate = useInvalidateEmployees();
+  const navigate = useNavigate();
+  const [value, setValue] = useState(emp.sipId);
+  const m = useMutation({
+    mutationFn: () => employeesApi.changeSipId(emp.sipId, value.trim()),
+    onSuccess: (next) => {
+      invalidate();
+      toast(`SIP ID changed to ${next.sipId}`);
+      navigate(`/employees/${next.sipId}`, { replace: true });
+      onClose();
+    },
+  });
+  const valid = /^[A-Za-z0-9][A-Za-z0-9._-]{0,29}$/.test(value.trim()) && value.trim() !== emp.sipId;
+  return (
+    <Modal
+      open
+      title="Change SIP ID"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn-primary" disabled={!valid || m.isPending} onClick={() => m.mutate()}>
+            Change SIP ID
+          </button>
+        </>
+      }
+    >
+      <p className="text-sm text-ink-2">
+        Salary, leave, payslips, sales, documents and linked accounts move to the new SIP ID with {emp.name}. Use their VICIdial user so the dialer finds them without a link.
+      </p>
+      <div className="mt-4">
+        <Field label="New SIP ID" hint="Letters, digits, dot, dash or underscore, e.g. WTI1002">
+          <input className="input num" value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
+        </Field>
+      </div>
+      <FormError message={m.error?.message} />
+    </Modal>
   );
 }

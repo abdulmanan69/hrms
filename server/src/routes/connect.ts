@@ -53,6 +53,27 @@ function nameScore(a: string, b: string): number {
   return common / Math.max(A.size, B.size);
 }
 
+/**
+ * The employee behind each account: a link made in HRMS first, otherwise an
+ * employee whose SIP ID is the account itself (staff whose SIP ID is their
+ * VICIdial user need no link).
+ */
+async function accountSips(system: string, context: string, ids: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (ids.length === 0) return out;
+  const links = await db
+    .select({ externalId: employeeLinks.externalId, sipId: employeeLinks.sipId })
+    .from(employeeLinks)
+    .where(and(eq(employeeLinks.system, system), eq(employeeLinks.context, context), inArray(employeeLinks.externalId, ids)));
+  for (const l of links) out.set(l.externalId, l.sipId);
+  const rest = ids.filter((id) => !out.has(id));
+  if (rest.length) {
+    const same = await db.select({ sipId: employees.sipId }).from(employees).where(inArray(employees.sipId, rest));
+    for (const e of same) out.set(e.sipId, e.sipId);
+  }
+  return out;
+}
+
 export async function connectRoutes(app: FastifyInstance): Promise<void> {
   const read = { preHandler: requirePermission('employees.view') };
   const manage = { preHandler: requirePermission('employees.manage') };
@@ -66,10 +87,10 @@ export async function connectRoutes(app: FastifyInstance): Promise<void> {
     const ids = [...new Set(q.ids.split(',').map((s) => s.trim()).filter(Boolean))];
     if (ids.length > 500) throw new ValidationError('Ask for at most 500 accounts at a time');
 
-    const rows = await db
+    const sipOf = await accountSips(system, q.context, ids);
+    const sipList = [...new Set(sipOf.values())];
+    const rows = !sipList.length ? [] : await db
       .select({
-        externalId: employeeLinks.externalId,
-        context: employeeLinks.context,
         sipId: employees.sipId,
         name: employeeNameSql,
         firstName: employees.firstName,
@@ -84,12 +105,11 @@ export async function connectRoutes(app: FastifyInstance): Promise<void> {
         managerSipId: employees.managerSipId,
         managerName: sql<string | null>`case when ${mgr.sipId} is null then null else trim(${mgr.firstName} || ' ' || ${mgr.lastName}) end`,
       })
-      .from(employeeLinks)
-      .innerJoin(employees, eq(employeeLinks.sipId, employees.sipId))
+      .from(employees)
       .leftJoin(departments, eq(employees.departmentId, departments.id))
       .leftJoin(designations, eq(employees.designationId, designations.id))
       .leftJoin(mgr, eq(employees.managerSipId, mgr.sipId))
-      .where(and(eq(employeeLinks.system, system), eq(employeeLinks.context, q.context), inArray(employeeLinks.externalId, ids)));
+      .where(inArray(employees.sipId, sipList));
 
     // managers' own accounts in this system, so a dialer can find the team lead too
     const managerSips = [...new Set(rows.map((r) => r.managerSipId).filter((x): x is string => !!x))];
@@ -126,15 +146,16 @@ export async function connectRoutes(app: FastifyInstance): Promise<void> {
           .orderBy(asc(leaveApplications.startDate))
       : [];
 
-    const byId = new Map(rows.map((r) => [r.externalId, r]));
+    const bySip = new Map(rows.map((r) => [r.sipId, r]));
     const data = ids.map((id) => {
-      const r = byId.get(id);
+      const sip = sipOf.get(id);
+      const r = sip ? bySip.get(sip) : undefined;
       if (!r) return { externalId: id, context: q.context, found: false as const };
       const mine = leave.filter((l) => l.sipId === r.sipId);
       const todayLeave = mine.find((l) => l.status === 'approved' && l.startDate <= today && l.endDate >= today);
       return {
         externalId: id,
-        context: r.context,
+        context: q.context,
         found: true as const,
         employee: {
           sipId: r.sipId,
@@ -307,10 +328,12 @@ export async function connectRoutes(app: FastifyInstance): Promise<void> {
       })
       .parse(req.body);
 
-    const ext = [...new Set(body.items.filter((i) => i.externalId).map((i) => i.externalId!))];
-    const links = ext.length
-      ? await db.select().from(employeeLinks).where(and(eq(employeeLinks.system, system), inArray(employeeLinks.externalId, ext)))
-      : [];
+    // accounts → people, per context (links first, then SIP ID = account)
+    const sipOfAccount = new Map<string, string>();
+    for (const ctx of new Set(body.items.filter((i) => i.externalId).map((i) => i.context))) {
+      const ext = [...new Set(body.items.filter((i) => i.externalId && i.context === ctx).map((i) => i.externalId!))];
+      for (const [acc, sip] of await accountSips(system, ctx, ext)) sipOfAccount.set(`${ctx} ${acc}`, sip);
+    }
     const sipsGiven = [...new Set(body.items.filter((i) => i.sipId).map((i) => i.sipId!))];
     const knownSips = new Set(
       sipsGiven.length ? (await db.select({ sipId: employees.sipId }).from(employees).where(inArray(employees.sipId, sipsGiven))).map((e) => e.sipId) : [],
@@ -323,7 +346,7 @@ export async function connectRoutes(app: FastifyInstance): Promise<void> {
         ? knownSips.has(i.sipId)
           ? i.sipId
           : null
-        : links.find((l) => l.externalId === i.externalId && l.context === i.context)?.sipId ?? null;
+        : sipOfAccount.get(`${i.context} ${i.externalId}`) ?? null;
       if (!sipId) {
         unknown.push(i.externalId ?? i.sipId!);
         continue;
@@ -395,13 +418,7 @@ export async function connectRoutes(app: FastifyInstance): Promise<void> {
 
     // accounts → people
     const accounts = [...new Set(body.items.flatMap((i) => [i.closer, i.fronter]).filter((x): x is string => !!x))];
-    const links = accounts.length
-      ? await db
-          .select({ externalId: employeeLinks.externalId, sipId: employeeLinks.sipId })
-          .from(employeeLinks)
-          .where(and(eq(employeeLinks.system, system), eq(employeeLinks.context, ctx), inArray(employeeLinks.externalId, accounts)))
-      : [];
-    const sipOfAccount = new Map(links.map((l) => [l.externalId, l.sipId]));
+    const sipOfAccount = await accountSips(system, ctx, accounts);
     const sipsGiven = [...new Set(body.items.flatMap((i) => [i.closerSipId, i.fronterSipId]).filter((x): x is string => !!x))];
     const knownSips = new Set(
       sipsGiven.length ? (await db.select({ sipId: employees.sipId }).from(employees).where(inArray(employees.sipId, sipsGiven))).map((e) => e.sipId) : [],

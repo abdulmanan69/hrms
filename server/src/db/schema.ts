@@ -165,7 +165,7 @@ export const users = pgTable(
     unique('users_company_sip_uq').on(t.companyId, t.sipId),
     index('users_email_idx').on(t.email),
     foreignKey({ name: 'users_role_fk', columns: [t.companyId, t.roleId], foreignColumns: [roles.companyId, roles.id] }),
-    foreignKey({ name: 'users_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }),
+    foreignKey({ name: 'users_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }).onUpdate('cascade'),
   ],
 );
 
@@ -368,7 +368,7 @@ export const applications = pgTable(
     unique('applications_company_id_uq').on(t.companyId, t.id),
     foreignKey({ name: 'applications_candidate_fk', columns: [t.companyId, t.candidateId], foreignColumns: [candidates.companyId, candidates.id] }),
     foreignKey({ name: 'applications_department_fk', columns: [t.companyId, t.departmentId], foreignColumns: [departments.companyId, departments.id] }),
-    foreignKey({ name: 'applications_hired_fk', columns: [t.companyId, t.hiredSipId], foreignColumns: [employees.companyId, employees.sipId] }),
+    foreignKey({ name: 'applications_hired_fk', columns: [t.companyId, t.hiredSipId], foreignColumns: [employees.companyId, employees.sipId] }).onUpdate('cascade'),
     index('applications_stage_idx').on(t.companyId, t.currentStage),
     index('applications_candidate_idx').on(t.companyId, t.candidateId),
     index('applications_followup_idx').on(t.companyId, t.nextFollowupDate),
@@ -483,7 +483,7 @@ export const employees = pgTable(
     foreignKey({ name: 'employees_candidate_fk', columns: [t.companyId, t.sourceCandidateId], foreignColumns: [candidates.companyId, candidates.id] }),
     foreignKey({ name: 'employees_department_fk', columns: [t.companyId, t.departmentId], foreignColumns: [departments.companyId, departments.id] }),
     foreignKey({ name: 'employees_designation_fk', columns: [t.companyId, t.designationId], foreignColumns: [designations.companyId, designations.id] }),
-    foreignKey({ name: 'employees_manager_fk', columns: [t.companyId, t.managerSipId], foreignColumns: [t.companyId, t.sipId] }),
+    foreignKey({ name: 'employees_manager_fk', columns: [t.companyId, t.managerSipId], foreignColumns: [t.companyId, t.sipId] }).onUpdate('cascade'),
     // one person, one record: a CNIC appears once per company (empty CNICs don't collide)
     uniqueIndex('employees_cnic_uq').on(t.companyId, t.cnic),
     index('employees_dept_idx').on(t.companyId, t.departmentId),
@@ -510,7 +510,7 @@ export const employeeDocuments = pgTable(
     deletedAt: ts('deleted_at'),
   },
   (t) => [
-    foreignKey({ name: 'employee_documents_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }),
+    foreignKey({ name: 'employee_documents_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }).onUpdate('cascade'),
     index('employee_documents_sip_idx').on(t.companyId, t.sipId),
   ],
 );
@@ -542,7 +542,7 @@ export const salaryStructures = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
-    foreignKey({ name: 'salary_structures_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }),
+    foreignKey({ name: 'salary_structures_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }).onUpdate('cascade'),
     uniqueIndex('salary_structures_period_uq').on(t.companyId, t.sipId, t.effectiveFrom),
   ],
 );
@@ -592,7 +592,7 @@ export const payslips = pgTable(
   (t) => [
     unique('payslips_company_id_uq').on(t.companyId, t.id),
     foreignKey({ name: 'payslips_run_fk', columns: [t.companyId, t.runId], foreignColumns: [payrollRuns.companyId, payrollRuns.id] }).onDelete('cascade'),
-    foreignKey({ name: 'payslips_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }),
+    foreignKey({ name: 'payslips_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }).onUpdate('cascade'),
     uniqueIndex('payslips_run_sip_uq').on(t.companyId, t.runId, t.sipId),
     index('payslips_sip_idx').on(t.companyId, t.sipId),
   ],
@@ -640,7 +640,7 @@ export const loansAdvances = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
-    foreignKey({ name: 'loans_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }),
+    foreignKey({ name: 'loans_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }).onUpdate('cascade'),
     foreignKey({ name: 'loans_run_fk', columns: [t.companyId, t.runId], foreignColumns: [payrollRuns.companyId, payrollRuns.id] }).onDelete('cascade'),
     index('loans_sip_idx').on(t.companyId, t.sipId, t.id),
   ],
@@ -689,7 +689,7 @@ export const leaveLedger = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
-    foreignKey({ name: 'leave_ledger_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }),
+    foreignKey({ name: 'leave_ledger_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }).onUpdate('cascade'),
     foreignKey({ name: 'leave_ledger_type_fk', columns: [t.companyId, t.leaveTypeId], foreignColumns: [leaveTypes.companyId, leaveTypes.id] }),
     index('leave_ledger_sip_type_idx').on(t.companyId, t.sipId, t.leaveTypeId, t.id),
     uniqueIndex('leave_ledger_reference_uq').on(t.companyId, t.sipId, t.leaveTypeId, t.reference),
@@ -720,7 +720,7 @@ export const leaveApplications = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
-    foreignKey({ name: 'leave_apps_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }),
+    foreignKey({ name: 'leave_apps_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }).onUpdate('cascade'),
     foreignKey({ name: 'leave_apps_type_fk', columns: [t.companyId, t.leaveTypeId], foreignColumns: [leaveTypes.companyId, leaveTypes.id] }),
     index('leave_apps_sip_idx').on(t.companyId, t.sipId),
     index('leave_apps_status_idx').on(t.companyId, t.status),
@@ -842,7 +842,7 @@ export const employeeLinks = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
-    foreignKey({ name: 'employee_links_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }),
+    foreignKey({ name: 'employee_links_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }).onUpdate('cascade'),
     // one account belongs to one person
     uniqueIndex('employee_links_external_uq').on(t.companyId, t.system, t.context, t.externalId),
     index('employee_links_sip_idx').on(t.companyId, t.sipId),
@@ -871,7 +871,7 @@ export const employeeMetrics = pgTable(
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },
   (t) => [
-    foreignKey({ name: 'employee_metrics_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }),
+    foreignKey({ name: 'employee_metrics_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }).onUpdate('cascade'),
     uniqueIndex('employee_metrics_uq').on(t.companyId, t.sipId, t.source, t.metric, t.period),
   ],
 );
@@ -913,7 +913,7 @@ export const sales = pgTable(
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },
   (t) => [
-    foreignKey({ name: 'sales_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }),
+    foreignKey({ name: 'sales_employee_fk', columns: [t.companyId, t.sipId], foreignColumns: [employees.companyId, employees.sipId] }).onUpdate('cascade'),
     // a source's sale is stored once per role; manual rows (null ref) never collide
     uniqueIndex('sales_external_uq').on(t.companyId, t.source, t.context, t.externalRef, t.role),
     index('sales_date_idx').on(t.companyId, t.saleDate),

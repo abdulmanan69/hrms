@@ -30,7 +30,8 @@ type FormState = Record<
   | 'dateOfJoining'
   | 'bankName'
   | 'accountNo'
-  | 'remarks',
+  | 'remarks'
+  | 'sipId',
   string
 >;
 
@@ -58,11 +59,13 @@ const EMPTY: FormState = {
   bankName: '',
   accountNo: '',
   remarks: '',
+  sipId: '',
 };
 
 function fromEmployee(e: EmployeeDetail): FormState {
   const s = (v: string | number | null | undefined) => (v == null ? '' : String(v));
   return {
+    sipId: e.sipId,
     firstName: e.firstName,
     middleInitial: s(e.middleInitial),
     lastName: e.lastName,
@@ -162,7 +165,7 @@ function FormBody({ existing }: { existing?: EmployeeDetail }) {
   const save = useMutation({
     mutationFn: () => {
       const body = toInput(f, showSensitive);
-      return existing ? employeesApi.update(existing.sipId, body) : employeesApi.create(body);
+      return existing ? employeesApi.update(existing.sipId, body) : employeesApi.create({ ...body, sipId: f.sipId.trim() || undefined });
     },
     onSuccess: (emp) => {
       invalidate();
@@ -336,6 +339,11 @@ function FormBody({ existing }: { existing?: EmployeeDetail }) {
             <Field label="Joining date" required error={err('dateOfJoining')}>
               <input type="date" className="input" {...bind('dateOfJoining')} />
             </Field>
+            {!existing && (
+              <Field label="SIP ID" hint="Their VICIdial user, e.g. WTI1002. Leave empty to generate one" error={err('sipId')}>
+                <input className="input num" {...bind('sipId')} autoComplete="off" />
+              </Field>
+            )}
           </Grid>
         </Section>
 

@@ -176,6 +176,15 @@ export const contactShape = {
   country: optText(60),
 };
 
+/**
+ * A SIP ID given by hand, e.g. the person's VICIdial user (WTI1002). Without
+ * one, HRMS generates 'YYYY-####'.
+ */
+export const sipIdField = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,29}$/, 'Use letters, digits, dot, dash or underscore (up to 30), e.g. WTI1002');
+
 const employeeShape = {
   firstName: z.string().trim().min(1, 'Enter a first name').max(60),
   middleInitial: middleInitialField,
