@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+  body {
+    @apply bg-bg text-ink font-sans text-sm;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand/60 ring-offset-1;
+  }
+  /* grid columns may shrink below their content: wide tables scroll inside their card instead of widening the page */
+  .grid > * {
+    min-width: 0;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-line bg-surface shadow-card;
+  }
+  .card-head {
+    @apply flex items-center justify-between gap-3 px-5 pt-4 pb-3;
+  }
+  .card-title {
+    @apply text-sm font-medium text-ink;
+  }
+  .btn {
+    @apply inline-flex h-9 items-center gap-2 rounded-lg px-4 text-sm font-medium transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-brand text-white hover:bg-brand-dark;
+  }
+  .btn-secondary {
+    @apply btn border border-line bg-surface text-ink hover:bg-raised;
+  }
+  .btn-danger {
+    @apply btn bg-bad text-white hover:bg-bad/90;
+  }
+  .btn-ghost {
+    @apply btn text-ink-2 hover:bg-raised hover:text-ink;
+  }
+  .btn-sm {
+    @apply h-8 px-3;
+  }
+  .icon-btn {
+    @apply grid h-8 w-8 place-items-center rounded-lg text-ink-3 transition-colors duration-150 hover:bg-raised hover:text-ink disabled:opacity-40;
+  }
+  textarea.input {
+    @apply h-auto py-2;
+  }
+  select.input {
+    @apply pr-8;
+  }
+  .table {
+    @apply w-full;
+  }
+  .table thead {
+    @apply border-y border-line bg-bg;
+  }
+  .table tbody {
+    @apply divide-y divide-line;
+  }
+  .table tbody tr {
+    @apply transition-colors duration-150;
+  }
+  .table tbody tr.row-link {
+    @apply cursor-pointer hover:bg-bg;
+  }
+  .input {
+    @apply h-9 w-full rounded-lg border border-line bg-surface px-3 text-sm placeholder:text-ink-3 focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/20;
+  }
+  .th {
+    @apply px-5 py-2 text-left text-xs font-normal text-ink-3 whitespace-nowrap;
+  }
+  .td {
+    @apply px-5 py-3 align-middle whitespace-nowrap;
+  }
+  .num {
+    @apply font-mono tabular-nums;
+  }
+}
+
+@layer utilities {
+  .rise {
+    animation: rise 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .pop {
+    animation: rise 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+/* Dialog: the scrim fades, the panel rises a few pixels and settles */
+.modal-scrim {
+  animation: fade 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.modal-panel {
+  animation: modal-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .pop,
+  .modal-scrim,
+  .modal-panel {
+    animation: none;
+  }
+}

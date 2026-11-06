@@ -1,0 +1,20 @@
+# dependencies and builds
+node_modules
+dist
+
+# secrets: real settings never go into git (.env.example is the template)
+.env
+.env.*
+!.env.example
+
+# data
+uploads
+*.dump
+*.sql.gz
+backup-*
+
+# logs and local leftovers
+*.log
+scratch-*
+.DS_Store
+Thumbs.db

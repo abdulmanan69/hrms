@@ -1,0 +1,5 @@
+# Store text with LF in the repo (deploys run on Linux); binaries untouched
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary

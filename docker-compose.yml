@@ -1,0 +1,73 @@
+name: wavetech-hrms
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "5" }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hrms}
+      POSTGRES_USER: ${POSTGRES_USER:-hrms}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-strong-password}
+      TZ: Asia/Karachi
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hrms} -d ${POSTGRES_DB:-hrms}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # localhost only, for backups and psql
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    logging: *logging
+
+  api:
+    build: ./server
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # the API always listens on 8080 inside its container
+      API_PORT: "8080"
+      DATABASE_URL: postgres://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-change-me-strong-password}@postgres:5432/${POSTGRES_DB:-hrms}
+      UPLOAD_DIR: /data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Files are stored compressed in Postgres. This volume only holds files left
+    # by older versions; they are moved into the database at start and deleted.
+    volumes:
+      - uploads:/data/uploads
+    # the web container proxies /api; the API itself is only on localhost
+    ports:
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: *logging
+
+  web:
+    build: ./web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-3000}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging: *logging
+
+volumes:
+  pgdata:
+  uploads:
